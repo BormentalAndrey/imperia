@@ -5,20 +5,6 @@ android {
     namespace 'com.imperia.emulator'
     compileSdk 34
 
-    signingConfigs {
-        release {
-            def keystorePropertiesFile = rootProject.file("app/keystore.properties")
-            if (keystorePropertiesFile.exists()) {
-                def keystoreProperties = new Properties()
-                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-                storeFile file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
-            }
-        }
-    }
-
     defaultConfig {
         applicationId "com.imperia.emulator"
         minSdk 26
@@ -27,11 +13,16 @@ android {
         versionName "1.0.0"
     }
 
-    buildTypes {
-        debug {
-            minifyEnabled false
-            signingConfig signingConfigs.debug
+    signingConfigs {
+        release {
+            storeFile file('release.keystore')
+            storePassword 'imperia123'
+            keyAlias 'imperia'
+            keyPassword 'imperia123'
         }
+    }
+
+    buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
