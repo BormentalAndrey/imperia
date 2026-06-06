@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.retroemulator.launcher">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Разрешения -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
@@ -9,23 +9,23 @@
     <uses-permission android:name="android.permission.INSTALL_SHORTCUT" />
     
     <!-- Для Android 11+ -->
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" 
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="Retro PC Emulator"
-        android:theme="@style/Theme.RetroEmulator"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.Imperia"
         android:largeHeap="true"
         android:requestLegacyExternalStorage="true">
 
         <!-- Лаунчер для создания ярлыков -->
         <activity
-            android:name=".GameShortcutCreator"
+            android:name="com.imperia.emulator.GameShortcutCreator"
             android:exported="true"
-            android:label="Создать ярлык игры"
-            android:theme="@style/Theme.RetroEmulator">
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Imperia">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -34,20 +34,18 @@
 
         <!-- Прямой запуск игры (без UI) -->
         <activity
-            android:name=".DirectLauncher"
+            android:name="com.imperia.emulator.DirectLauncher"
             android:exported="true"
             android:label="Запуск игры"
             android:theme="@android:style/Theme.NoDisplay"
             android:excludeFromRecents="true"
             android:launchMode="singleTask">
             
-            <!-- Интент-фильтр для запуска из ярлыков -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             
-            <!-- Поддержка запуска .exe файлов -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -69,4 +67,5 @@
             android:exported="false" />
 
     </application>
+
 </manifest>
