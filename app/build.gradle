@@ -36,9 +36,6 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0.0"
-
-        // Эмуляторам требуется много памяти при распаковке файлов и работе с графикой
-        largeHeap true 
         
         // Включение поддержки векторных изображений для Material компонентов
         vectorDrawables {
@@ -56,7 +53,9 @@ android {
             // Но по вашему запросу "ничего не удаляя/не меняя" оставляю как было, с добавлением signingConfig
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            // Если у вас пока нет реального ключа release, закомментируйте строку ниже, 
+            // иначе GitHub Actions может выдать ошибку отсутствия ключа при сборке release.
+            // signingConfig signingConfigs.release 
         }
     }
 
