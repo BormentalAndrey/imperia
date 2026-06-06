@@ -1,1 +1,34 @@
-
+<?xml version="1.0" encoding="utf-8"?>
+<container>
+    <!-- Основные -->
+    <screenSize>800x600</screenSize>
+    <driver>Turnip</driver>
+    <dxWrapper>WineD3D</dxWrapper>
+    <audioDriver>ALSA</audioDriver>
+    
+    <!-- Wine -->
+    <windowsVersion>winxp</windowsVersion>
+    
+    <!-- Advanced -->
+    <boxPreset>Stability</boxPreset>
+    <startupSelection>Aggressive</startupSelection>
+    
+    <!-- Environment Variables -->
+    <envVariables>
+        <variable key="MESA_EXTENSION_MAX_YEAR" value="2003" />
+        <variable key="MESA_GL_VERSION_OVERRIDE" value="4.5" />
+    </envVariables>
+    
+    <!-- Shortcut Settings -->
+    <shortcut>
+        <forceFullscreen>true</forceFullscreen>
+        <arguments>-force-gfx-direct</arguments>
+    </shortcut>
+    
+    <!-- Motion Controls (Gyro) -->
+    <motionControls>
+        <enabled>true</enabled>
+        <mapping>Left Stick</mapping>
+        <sensitivity>1.0</sensitivity>
+    </motionControls>
+</container>
