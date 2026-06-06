@@ -2,13 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Разрешения -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.INSTALL_SHORTCUT" />
-    
-    <!-- Для Android 11+ -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
@@ -20,7 +17,6 @@
         android:largeHeap="true"
         android:requestLegacyExternalStorage="true">
 
-        <!-- Лаунчер для создания ярлыков -->
         <activity
             android:name="com.imperia.emulator.GameShortcutCreator"
             android:exported="true"
@@ -32,20 +28,17 @@
             </intent-filter>
         </activity>
 
-        <!-- Прямой запуск игры (без UI) -->
         <activity
             android:name="com.imperia.emulator.DirectLauncher"
             android:exported="true"
-            android:label="Запуск игры"
+            android:label="@string/launch_game"
             android:theme="@android:style/Theme.NoDisplay"
             android:excludeFromRecents="true"
             android:launchMode="singleTask">
-            
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-            
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -53,7 +46,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Оригинальная активность Winlator -->
         <activity
             android:name="com.winlator.WineActivity"
             android:exported="false"
@@ -61,7 +53,6 @@
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
         </activity>
 
-        <!-- Сервис для фоновой работы -->
         <service
             android:name="com.winlator.WineService"
             android:exported="false" />
