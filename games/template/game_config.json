@@ -1,0 +1,22 @@
+{
+  "id": "diablo2",
+  "name": "Diablo II",
+  "exe_name": "Diablo II.exe",
+  "arguments": "-w",
+  "use_dxvk": true,
+  "fullscreen": true,
+  "resolution": "1280x720",
+  "controls": {
+    "touch_controls": true,
+    "gamepad_support": true
+  },
+  "wine": {
+    "version": "8.0",
+    "prefix": "win64",
+    "overrides": {
+      "ddraw": "native",
+      "d3d8": "builtin",
+      "d3d9": "builtin"
+    }
+  }
+}
