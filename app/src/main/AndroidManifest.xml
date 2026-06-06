@@ -18,7 +18,6 @@
         android:requestLegacyExternalStorage="true"
         android:usesCleartextTraffic="true">
 
-        <!-- Главный экран NFS -->
         <activity
             android:name="com.imperia.emulator.NFSLauncherActivity"
             android:exported="true"
@@ -33,7 +32,6 @@
         <activity
             android:name="com.imperia.emulator.DirectLauncher"
             android:exported="true"
-            android:label="Запуск игры"
             android:theme="@android:style/Theme.NoDisplay"
             android:excludeFromRecents="true"
             android:launchMode="singleTask">
