@@ -13,20 +13,14 @@ android {
         versionName "1.0.0"
     }
 
-    signingConfigs {
-        release {
-            storeFile file('release.keystore')
-            storePassword 'imperia123'
-            keyAlias 'imperia'
-            keyPassword 'imperia123'
-        }
-    }
-
     buildTypes {
+        debug {
+            minifyEnabled false
+            debuggable true
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
         }
     }
 
