@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FF6200EE</color>
-    <color name="ic_launcher_foreground">#FFFFFFFF</color>
+    <color name="ic_launcher_background">#1A1A2E</color>
+    <color name="ic_launcher_foreground">#E94560</color>
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
