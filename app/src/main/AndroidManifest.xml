@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.retroemulator.launcher">
+
+    <!-- Разрешения -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.INSTALL_SHORTCUT" />
+    
+    <!-- Для Android 11+ -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" 
+        tools:ignore="ScopedStorage" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Retro PC Emulator"
+        android:theme="@style/Theme.RetroEmulator"
+        android:largeHeap="true"
+        android:requestLegacyExternalStorage="true">
+
+        <!-- Лаунчер для создания ярлыков -->
+        <activity
+            android:name=".GameShortcutCreator"
+            android:exported="true"
+            android:label="Создать ярлык игры"
+            android:theme="@style/Theme.RetroEmulator">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Прямой запуск игры (без UI) -->
+        <activity
+            android:name=".DirectLauncher"
+            android:exported="true"
+            android:label="Запуск игры"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask">
+            
+            <!-- Интент-фильтр для запуска из ярлыков -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            
+            <!-- Поддержка запуска .exe файлов -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/x-msdownload" />
+            </intent-filter>
+        </activity>
+
+        <!-- Оригинальная активность Winlator -->
+        <activity
+            android:name="com.winlator.WineActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
+        </activity>
+
+        <!-- Сервис для фоновой работы -->
+        <service
+            android:name="com.winlator.WineService"
+            android:exported="false" />
+
+    </application>
+</manifest>
