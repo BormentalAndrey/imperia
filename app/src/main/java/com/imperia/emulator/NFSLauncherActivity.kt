@@ -2,14 +2,12 @@ package com.imperia.emulator
 
 import android.content.Intent
 import android.os.Bundle
-import android.os.Environment
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import java.io.File
 
 class NFSLauncherActivity : AppCompatActivity() {
     
@@ -33,20 +31,29 @@ class NFSLauncherActivity : AppCompatActivity() {
             setPadding(64, 128, 64, 64)
         }
         
-        // Заголовок
         layout.addView(TextView(this).apply {
             text = "Need for Speed\nUnderground 2"
             textSize = 28f
         })
         
-        // Размер
         layout.addView(TextView(this).apply {
             text = "Размер: 2.1 GB"
             textSize = 16f
             setPadding(0, 16, 0, 16)
         })
         
-        // Статус
+        layout.addView(TextView(this).apply {
+            text = "Настройки контейнера:\n" +
+                   "• Экран: 800x600\n" +
+                   "• Драйвер: Turnip\n" +
+                   "• DX Wrapper: WineD3D\n" +
+                   "• Windows: XP\n" +
+                   "• Box64: Stability\n" +
+                   "• MESA: 2003 / GL 4.5"
+            textSize = 12f
+            setPadding(0, 8, 0, 16)
+        })
+        
         statusText = TextView(this).apply {
             text = "Проверка..."
             textSize = 18f
@@ -54,7 +61,6 @@ class NFSLauncherActivity : AppCompatActivity() {
         }
         layout.addView(statusText)
         
-        // Прогресс-бар
         progressBar = ProgressBar(this).apply {
             isIndeterminate = false
             max = 100
@@ -62,7 +68,6 @@ class NFSLauncherActivity : AppCompatActivity() {
         }
         layout.addView(progressBar)
         
-        // Кнопка
         actionButton = Button(this).apply {
             text = "Загрузить игру"
             setOnClickListener {
@@ -128,6 +133,7 @@ class NFSLauncherActivity : AppCompatActivity() {
             putExtra("EXE_NAME", "speed2.exe")
             putExtra("EXE_PATH", NFSDownloader.EXE_FILE.absolutePath)
             putExtra("GAME_PATH", NFSDownloader.GAME_DIR.absolutePath)
+            putExtra("CONTAINER_CONFIG", "nfsu2_container.wcp")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         startActivity(intent)
