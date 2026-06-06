@@ -1,15 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.RetroEmulator" parent="Theme.AppCompat.Light.DarkActionBar">
+    <style name="Theme.Imperia" parent="Theme.AppCompat.Light.DarkActionBar">
         <item name="colorPrimary">#1A1A2E</item>
         <item name="colorPrimaryDark">#0F0F1A</item>
         <item name="colorAccent">#E94560</item>
         <item name="android:windowBackground">#16213E</item>
-    </style>
-    
-    <style name="Theme.RetroEmulator.NoDisplay" parent="Theme.AppCompat.NoActionBar">
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowNoTitle">true</item>
     </style>
 </resources>
