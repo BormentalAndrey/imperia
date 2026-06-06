@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Retro PC Emulator</string>
+    <string name="app_name">Imperia Emulator</string>
     <string name="create_shortcut">Создать ярлык игры</string>
     <string name="launch_game">Запустить игру</string>
     <string name="no_games_found">Игры не найдены</string>
