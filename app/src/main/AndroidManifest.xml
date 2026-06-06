@@ -12,15 +12,17 @@
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="NFS Underground 2"
         android:theme="@style/Theme.Imperia"
         android:largeHeap="true"
-        android:requestLegacyExternalStorage="true">
+        android:requestLegacyExternalStorage="true"
+        android:usesCleartextTraffic="true">
 
+        <!-- Главный экран NFS -->
         <activity
-            android:name="com.imperia.emulator.GameShortcutCreator"
+            android:name="com.imperia.emulator.NFSLauncherActivity"
             android:exported="true"
-            android:label="@string/app_name"
+            android:label="NFS Underground 2"
             android:theme="@style/Theme.Imperia">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -31,19 +33,10 @@
         <activity
             android:name="com.imperia.emulator.DirectLauncher"
             android:exported="true"
-            android:label="@string/launch_game"
+            android:label="Запуск игры"
             android:theme="@android:style/Theme.NoDisplay"
             android:excludeFromRecents="true"
             android:launchMode="singleTask">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="application/x-msdownload" />
-            </intent-filter>
         </activity>
 
         <activity
