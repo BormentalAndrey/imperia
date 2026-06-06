@@ -1,4 +1,4 @@
-name: Build APK
+name: Build Debug APK
 
 on:
   push:
@@ -23,23 +23,6 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
       
-      - name: Generate keystore
-        run: |
-          keytool -genkey -v \
-            -keystore release.keystore \
-            -alias imperia \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass imperia123 \
-            -keypass imperia123 \
-            -dname "CN=Imperia, OU=Emulator, O=Imperia, L=City, ST=State, C=US"
-          
-          echo "=== Проверка keystore ==="
-          ls -la release.keystore
-          echo "=== Текущая папка ==="
-          pwd
-      
       - name: Setup Gradle wrapper
         run: |
           if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
@@ -49,35 +32,21 @@ jobs:
           fi
           chmod +x gradlew
       
-      - name: Build release APK
-        run: |
-          echo "=== Содержимое корня ==="
-          ls -la
-          echo "=== Запуск сборки ==="
-          ./gradlew assembleRelease --stacktrace
-      
-      - name: Check APK
-        run: |
-          echo "=== Поиск APK ==="
-          find . -name "*.apk" -type f
-          echo "=== Проверка подписи ==="
-          for apk in $(find . -name "*.apk" -type f); do
-            echo "APK: $apk"
-            jarsigner -verify -verbose "$apk" || echo "Проверка не удалась"
-          done
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Imperia-APK
-          path: app/build/outputs/apk/release/*.apk
+          name: Imperia-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
       
       - name: Create Release
         if: success()
         uses: softprops/action-gh-release@v1
         with:
-          files: app/build/outputs/apk/release/*.apk
+          files: app/build/outputs/apk/debug/*.apk
           tag_name: v${{ github.run_number }}
-          name: "Imperia v${{ github.run_number }}"
+          name: "Imperia Debug v${{ github.run_number }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
