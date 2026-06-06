@@ -34,28 +34,37 @@ jobs:
             -storepass imperia123 \
             -keypass imperia123 \
             -dname "CN=Imperia, OU=Emulator, O=Imperia, L=City, ST=State, C=US"
+          
+          echo "=== Проверка keystore ==="
+          ls -la release.keystore
+          echo "=== Текущая папка ==="
+          pwd
       
-      - name: Create signing config
+      - name: Setup Gradle wrapper
         run: |
-          mkdir -p app
-          cat > app/keystore.properties << 'EOF'
-          storeFile=../../release.keystore
-          storePassword=imperia123
-          keyAlias=imperia
-          keyPassword=imperia123
-          EOF
-      
-      - name: Grant execute permission
-        run: chmod +x gradlew
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+            mkdir -p gradle/wrapper
+            curl -L -o gradle/wrapper/gradle-wrapper.jar \
+              "https://github.com/gradle/gradle/raw/v8.4.0/gradle/wrapper/gradle-wrapper.jar"
+          fi
+          chmod +x gradlew
       
       - name: Build release APK
         run: |
-          ./gradlew assembleRelease
+          echo "=== Содержимое корня ==="
+          ls -la
+          echo "=== Запуск сборки ==="
+          ./gradlew assembleRelease --stacktrace
       
-      - name: List APKs
+      - name: Check APK
         run: |
+          echo "=== Поиск APK ==="
           find . -name "*.apk" -type f
-          ls -la app/build/outputs/apk/release/
+          echo "=== Проверка подписи ==="
+          for apk in $(find . -name "*.apk" -type f); do
+            echo "APK: $apk"
+            jarsigner -verify -verbose "$apk" || echo "Проверка не удалась"
+          done
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
