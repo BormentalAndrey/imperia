@@ -20,12 +20,56 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       
-      - name: Build APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
       
-      - name: Upload APK
+      - name: Generate Gradle Wrapper
+        run: |
+          # Проверяем, есть ли gradlew
+          if [ ! -f "gradlew" ]; then
+            echo "Генерируем Gradle wrapper..."
+            
+            # Устанавливаем Gradle
+            sudo apt-get update
+            sudo apt-get install -y wget unzip
+            
+            # Скачиваем Gradle 8.4
+            wget https://services.gradle.org/distributions/gradle-8.4-bin.zip
+            unzip gradle-8.4-bin.zip
+            export PATH=$PATH:$(pwd)/gradle-8.4/bin
+            
+            # Генерируем wrapper в проекте
+            cd app
+            gradle wrapper --gradle-version 8.4
+            cd ..
+            
+            # Копируем wrapper в корень
+            cp -r app/gradle ./
+            cp app/gradlew ./
+            cp app/gradlew.bat ./
+            chmod +x gradlew
+          fi
+      
+      - name: Check Gradle wrapper
+        run: |
+          echo "=== Проверка файлов ==="
+          ls -la gradlew
+          ls -la gradle/wrapper/
+          echo "=== Содержимое gradle-wrapper.properties ==="
+          cat gradle/wrapper/gradle-wrapper.properties 2>/dev/null || echo "Файл не найден"
+      
+      - name: Grant execute permission
+        run: chmod +x gradlew
+      
+      - name: Build with Gradle
+        run: ./gradlew assembleRelease --stacktrace
+      
+      - name: List APK files
+        run: |
+          echo "=== Поиск APK ==="
+          find . -name "*.apk" -type f
+      
+      - name: Upload APK to artifacts
         uses: actions/upload-artifact@v4
         with:
           name: RetroEmulator-APK
@@ -41,9 +85,16 @@ jobs:
           body: |
             ## 🎮 Retro PC Emulator
             
-            ### Что нового:
-            - Бесшовный запуск игр
+            ### Сборка от ${{ github.event.head_commit.timestamp }}
+            
+            **Особенности:**
+            - Бесшовный запуск игр без меню
             - Поддержка DirectX через DXVK
             - Создание ярлыков на рабочем столе
+            
+            **Установка:**
+            1. Скачайте APK
+            2. Разрешите установку из неизвестных источников
+            3. Установите и запустите
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
