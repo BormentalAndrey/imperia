@@ -1,4 +1,4 @@
-package com.retroemulator.launcher
+package com.imperia.emulator
 
 import android.app.Activity
 import android.content.Intent
@@ -26,10 +26,7 @@ class DirectLauncher : Activity() {
         
         Log.d(TAG, "Запуск игры: $gameId, exe: $exeName")
         
-        // Показываем минимальный UI на время загрузки
-        setContentView(android.R.layout.activity_main)
-        
-        // Запускаем игру
+        // Запускаем игру сразу, без UI
         launchGame(gameId, exeName, gamePath)
     }
     
@@ -50,10 +47,16 @@ class DirectLauncher : Activity() {
                 copyGameFromAssets(gameId, gameDir)
             }
             
-            // Запускаем через Winlator Wine Activity
+            if (!exeFile.exists()) {
+                Toast.makeText(this, "Файл не найден: ${exeFile.absolutePath}", Toast.LENGTH_LONG).show()
+                finish()
+                return
+            }
+            
+            // Запускаем через Wine Activity
             val wineIntent = Intent()
             wineIntent.setClassName(
-                "com.winlator",
+                "com.imperia.emulator",
                 "com.winlator.WineActivity"
             )
             wineIntent.putExtra("executable", exeFile.absolutePath)
@@ -61,6 +64,7 @@ class DirectLauncher : Activity() {
             wineIntent.putExtra("fullscreen", true)
             wineIntent.putExtra("dxvk", true)
             wineIntent.putExtra("show_fps", false)
+            wineIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             
             startActivity(wineIntent)
             
