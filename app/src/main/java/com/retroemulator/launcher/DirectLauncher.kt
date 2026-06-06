@@ -7,7 +7,6 @@ import android.os.Environment
 import android.util.Log
 import android.widget.Toast
 import java.io.File
-import java.io.FileOutputStream
 
 class DirectLauncher : Activity() {
     
@@ -19,33 +18,21 @@ class DirectLauncher : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Получаем параметры запуска
-        val gameId = intent.getStringExtra("GAME_ID") ?: "default"
-        val exeName = intent.getStringExtra("EXE_NAME") ?: "game.exe"
+        val gameId = intent.getStringExtra("GAME_ID") ?: "nfsu2"
+        val exeName = intent.getStringExtra("EXE_NAME") ?: "speed2.exe"
         val gamePath = intent.getStringExtra("GAME_PATH") ?: ""
+        val containerConfig = intent.getStringExtra("CONTAINER_CONFIG") ?: "nfsu2_container.wcp"
         
-        Log.d(TAG, "Запуск игры: $gameId, exe: $exeName")
+        Log.d(TAG, "Запуск игры: $gameId, exe: $exeName, config: $containerConfig")
         
-        // Запускаем игру сразу, без UI
-        launchGame(gameId, exeName, gamePath)
+        launchGame(gameId, exeName, gamePath, containerConfig)
     }
     
-    private fun launchGame(gameId: String, exeName: String, gamePath: String) {
+    private fun launchGame(gameId: String, exeName: String, gamePath: String, containerConfig: String) {
         try {
-            // Путь к папке с играми
             val gamesDir = File(Environment.getExternalStorageDirectory(), GAMES_DIR)
-            val gameDir = if (gamePath.isNotEmpty()) {
-                File(gamePath)
-            } else {
-                File(gamesDir, gameId)
-            }
-            
-            // Проверяем, существует ли игра
+            val gameDir = if (gamePath.isNotEmpty()) File(gamePath) else File(gamesDir, gameId)
             val exeFile = File(gameDir, exeName)
-            if (!exeFile.exists()) {
-                // Копируем из assets при первом запуске
-                copyGameFromAssets(gameId, gameDir)
-            }
             
             if (!exeFile.exists()) {
                 Toast.makeText(this, "Файл не найден: ${exeFile.absolutePath}", Toast.LENGTH_LONG).show()
@@ -53,18 +40,20 @@ class DirectLauncher : Activity() {
                 return
             }
             
-            // Запускаем через Wine Activity
-            val wineIntent = Intent()
-            wineIntent.setClassName(
-                "com.imperia.emulator",
-                "com.winlator.WineActivity"
-            )
-            wineIntent.putExtra("executable", exeFile.absolutePath)
-            wineIntent.putExtra("working_dir", gameDir.absolutePath)
-            wineIntent.putExtra("fullscreen", true)
-            wineIntent.putExtra("dxvk", true)
-            wineIntent.putExtra("show_fps", false)
-            wineIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val wineIntent = Intent().apply {
+                setClassName("com.imperia.emulator", "com.winlator.WineActivity")
+                putExtra("executable", exeFile.absolutePath)
+                putExtra("working_dir", gameDir.absolutePath)
+                putExtra("container_config", containerConfig)
+                putExtra("fullscreen", true)
+                putExtra("dx_wrapper", "WineD3D")
+                putExtra("box_preset", "Stability")
+                putExtra("windows_version", "winxp")
+                putExtra("env_vars", "MESA_EXTENSION_MAX_YEAR=2003,MESA_GL_VERSION_OVERRIDE=4.5")
+                putExtra("force_fullscreen", true)
+                putExtra("arguments", "-force-gfx-direct")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
             
             startActivity(wineIntent)
             
@@ -72,37 +61,7 @@ class DirectLauncher : Activity() {
             Log.e(TAG, "Ошибка запуска игры", e)
             Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
         } finally {
-            // Закрываем лаунчер
             finish()
-        }
-    }
-    
-    private fun copyGameFromAssets(gameId: String, gameDir: File) {
-        try {
-            gameDir.mkdirs()
-            
-            // Копируем файлы игры из assets
-            val assetsPath = "games/$gameId"
-            val assetManager = assets
-            
-            assetManager.list(assetsPath)?.forEach { filename ->
-                val inputStream = assetManager.open("$assetsPath/$filename")
-                val outputFile = File(gameDir, filename)
-                
-                FileOutputStream(outputFile).use { output ->
-                    inputStream.copyTo(output)
-                }
-                
-                // Даём права на выполнение для .exe файлов
-                if (filename.endsWith(".exe") || filename.endsWith(".bat")) {
-                    outputFile.setExecutable(true)
-                }
-            }
-            
-            Log.d(TAG, "Игра скопирована в ${gameDir.absolutePath}")
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Ошибка копирования игры", e)
         }
     }
 }
