@@ -30,19 +30,22 @@ jobs:
 
       - name: 3. Remove conflicting folders from archive
         run: |
-          # Удаляем папки которые есть в корне и конфликтуют
           rm -rf "$ROOT_DIR/.github"
           rm -rf "$ROOT_DIR/.git"
-          echo "Конфликтующие папки удалены из архива"
+          echo "Конфликтующие папки удалены"
 
-      - name: 4. Backup Gradle wrapper
+      - name: 4. Backup Gradle wrapper (если есть)
         run: |
           mkdir -p /tmp/gradle-backup
-          cp -r gradle /tmp/gradle-backup/ 2>/dev/null
-          cp gradlew /tmp/gradle-backup/ 2>/dev/null
-          cp gradlew.bat /tmp/gradle-backup/ 2>/dev/null
-          cp gradle.properties /tmp/gradle-backup/ 2>/dev/null
-          echo "Gradle backup создан"
+          if [ -f gradlew ]; then
+            cp gradlew /tmp/gradle-backup/
+            cp gradlew.bat /tmp/gradle-backup/ 2>/dev/null || true
+            cp -r gradle /tmp/gradle-backup/ 2>/dev/null || true
+            cp gradle.properties /tmp/gradle-backup/ 2>/dev/null || true
+            echo "Gradle backup создан"
+          else
+            echo "gradlew не найден — бекап не нужен"
+          fi
 
       - name: 5. Clear repository
         run: |
@@ -66,19 +69,21 @@ jobs:
           done
           rm -rf "$ROOT_DIR" winlator.zip release.json
 
-      - name: 7. Restore Gradle wrapper
+      - name: 7. Restore Gradle wrapper (если был)
         run: |
-          if [ ! -f gradlew ]; then
+          if [ ! -f gradlew ] && [ -f /tmp/gradle-backup/gradlew ]; then
             cp /tmp/gradle-backup/gradlew .
-            cp /tmp/gradle-backup/gradlew.bat .
-            cp -r /tmp/gradle-backup/gradle .
+            cp /tmp/gradle-backup/gradlew.bat . 2>/dev/null || true
+            cp -r /tmp/gradle-backup/gradle . 2>/dev/null || true
             chmod +x gradlew
+            echo "Gradle wrapper восстановлен"
           fi
-          if [ ! -f gradle.properties ]; then
+          if [ ! -f gradle.properties ] && [ -f /tmp/gradle-backup/gradle.properties ]; then
             cp /tmp/gradle-backup/gradle.properties .
+            echo "gradle.properties восстановлен"
           fi
           echo "=== Проверка ==="
-          ls -la gradlew
+          ls -la gradlew 2>/dev/null || echo "gradlew отсутствует (будет сгенерирован позже)"
 
       - name: 8. Fetch Modules
         run: |
@@ -88,10 +93,25 @@ jobs:
           git clone --depth 1 https://github.com/brunodev85/vortek vortek
           rm -rf app/.git gladio/.git vortek/.git
 
-      - name: 9. Commit and Push
+      - name: 9. Generate Gradle wrapper (если нет)
+        run: |
+          if [ ! -f gradlew ]; then
+            echo "Генерирую Gradle wrapper..."
+            if ! command -v gradle &> /dev/null; then
+              sudo apt-get update -qq && sudo apt-get install -y -qq wget unzip
+              wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip
+              sudo unzip -q gradle-8.4-bin.zip -d /opt
+              sudo ln -s /opt/gradle-8.4/bin/gradle /usr/local/bin/gradle
+            fi
+            gradle wrapper --gradle-version 8.4
+            chmod +x gradlew
+            echo "Gradle wrapper сгенерирован"
+          fi
+
+      - name: 10. Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "🚀 Winlator core + modules" || echo "Нет изменений"
+          git commit -m "🚀 Winlator core + modules + Gradle" || echo "Нет изменений"
           git push origin main --force
