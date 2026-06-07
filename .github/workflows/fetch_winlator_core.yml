@@ -1,11 +1,10 @@
 name: Fetch and Commit Winlator Core Files
 
-# Скрипт будет запускаться вручную по кнопке из вкладки "Actions" в GitHub
 on:
   workflow_dispatch: 
 
 permissions:
-  contents: write # Даем права боту на пуш коммитов в ваш репозиторий
+  contents: write
 
 jobs:
   fetch-winlator-files:
@@ -14,29 +13,43 @@ jobs:
     steps:
       - name: 1. Клонирование вашего репозитория (Imperia)
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 2. Клонирование оригинального репозитория Winlator (во временную папку)
+      - name: 2. Клонирование оригинального репозитория Winlator
         run: |
           echo "Скачиваем исходники Winlator..."
           git clone --depth 1 https://github.com/brunodev85/winlator.git /tmp/winlator
 
       - name: 3. Создание нужной структуры папок в Imperia
         run: |
-          echo "Создаем директории для ядра..."
           mkdir -p app/src/main/java/com/winlator/core
           mkdir -p app/src/main/java/com/winlator/xserver
 
-      - name: 4. Копирование файлов (core, xserver)
+      - name: 4. Умный поиск и копирование файлов
         run: |
-          echo "Переносим классы..."
-          # Копируем всё содержимое папок core и xserver, не удаляя то, что у вас уже есть
-          cp -rn /tmp/winlator/app/src/main/java/com/winlator/core/* app/src/main/java/com/winlator/core/ || true
-          cp -rn /tmp/winlator/app/src/main/java/com/winlator/xserver/* app/src/main/java/com/winlator/xserver/ || true
+          echo "Ищем фактическое расположение папок в Winlator..."
           
-          # Опционально: захватим еще JNI-мосты, если они нужны для сборки C++ части
-          # cp -rn /tmp/winlator/app/src/main/cpp/* app/src/main/cpp/ || true
+          # Динамический поиск папок core и xserver
+          CORE_DIR=$(find /tmp/winlator -type d -path "*/com/winlator/core" | head -n 1)
+          XSERVER_DIR=$(find /tmp/winlator -type d -path "*/com/winlator/xserver" | head -n 1)
+          
+          echo "Найден путь к core: $CORE_DIR"
+          echo "Найден путь к xserver: $XSERVER_DIR"
+          
+          # Копируем содержимое найденных папок (используем /. для надежного копирования всех файлов)
+          if [ -n "$CORE_DIR" ]; then
+            cp -R "$CORE_DIR"/. app/src/main/java/com/winlator/core/
+            echo "✅ Файлы core успешно скопированы."
+          else
+            echo "❌ Папка core не найдена! Вывожу структуру для отладки:"
+            find /tmp/winlator -type d -name "*winlator*"
+          fi
+          
+          if [ -n "$XSERVER_DIR" ]; then
+            cp -R "$XSERVER_DIR"/. app/src/main/java/com/winlator/xserver/
+            echo "✅ Файлы xserver успешно скопированы."
+          else
+            echo "❌ Папка xserver не найдена!"
+          fi
 
       - name: 5. Настройка Git и автоматический Коммит
         run: |
@@ -44,15 +57,13 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          echo "Добавляем новые файлы в индекс..."
           git add app/src/main/java/com/winlator/core/
           git add app/src/main/java/com/winlator/xserver/
           
-          # Проверяем, есть ли изменения. Если файлов не было и они добавились — коммитим.
           if git diff-index --quiet HEAD --; then
-            echo "✅ Изменений нет, все файлы уже на месте."
+            echo "🤷 Изменений нет, все файлы уже на месте или ничего не скопировано."
           else
             echo "📦 Коммитим новые файлы ядра!"
-            git commit -m "🤖 Автоматический перенос файлов ядра Winlator (core, xserver)"
+            git commit -m "🤖 Умный перенос файлов ядра Winlator (core, xserver)"
             git push
           fi
