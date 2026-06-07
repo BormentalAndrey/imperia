@@ -1,117 +1,51 @@
-name: Full Reset - Clone Winlator Source
+name: Build Winlator APK
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  reset-and-clone:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
     steps:
-      - name: Checkout current repo
-        uses: actions/checkout@v4
-
-      - name: 1. Fetch Winlator Source ZIP
+      - uses: actions/checkout@v4
+      
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: Grant execute permission
+        run: chmod +x gradlew
+      
+      - name: Build debug APK
+        run: ./gradlew assembleDebug
+      
+      - name: Find APK
         run: |
-          echo "=== Получаем последний релиз ==="
-          curl -s https://api.github.com/repos/brunodev85/Winlator/releases/latest > release.json
-          TAG=$(grep '"tag_name"' release.json | head -1 | cut -d'"' -f4)
-          echo "Тег: $TAG"
-          wget -O winlator.zip "https://github.com/brunodev85/Winlator/archive/refs/tags/${TAG}.zip"
-
-      - name: 2. Extract archive
-        run: |
-          unzip -q winlator.zip
-          ROOT_DIR=$(find . -maxdepth 1 -type d -iname "winlator-*" | head -1)
-          ROOT_DIR=$(basename "$ROOT_DIR")
-          echo "ROOT_DIR=$ROOT_DIR" >> $GITHUB_ENV
-
-      - name: 3. Remove conflicting folders from archive
-        run: |
-          rm -rf "$ROOT_DIR/.github"
-          rm -rf "$ROOT_DIR/.git"
-          echo "Конфликтующие папки удалены"
-
-      - name: 4. Backup Gradle wrapper (если есть)
-        run: |
-          mkdir -p /tmp/gradle-backup
-          if [ -f gradlew ]; then
-            cp gradlew /tmp/gradle-backup/
-            cp gradlew.bat /tmp/gradle-backup/ 2>/dev/null || true
-            cp -r gradle /tmp/gradle-backup/ 2>/dev/null || true
-            cp gradle.properties /tmp/gradle-backup/ 2>/dev/null || true
-            echo "Gradle backup создан"
-          else
-            echo "gradlew не найден — бекап не нужен"
-          fi
-
-      - name: 5. Clear repository
-        run: |
-          find . -mindepth 1 -maxdepth 1 \
-            -not -name '.git' \
-            -not -name '.github' \
-            -not -name "$ROOT_DIR" \
-            -not -name 'winlator.zip' \
-            -not -name 'release.json' \
-            -exec rm -rf {} +
-
-      - name: 6. Move Winlator to root
-        run: |
-          shopt -s dotglob
-          for item in "$ROOT_DIR"/*; do
-            base=$(basename "$item")
-            if [ -e "$base" ]; then
-              rm -rf "$base"
-            fi
-            mv "$item" .
-          done
-          rm -rf "$ROOT_DIR" winlator.zip release.json
-
-      - name: 7. Restore Gradle wrapper (если был)
-        run: |
-          if [ ! -f gradlew ] && [ -f /tmp/gradle-backup/gradlew ]; then
-            cp /tmp/gradle-backup/gradlew .
-            cp /tmp/gradle-backup/gradlew.bat . 2>/dev/null || true
-            cp -r /tmp/gradle-backup/gradle . 2>/dev/null || true
-            chmod +x gradlew
-            echo "Gradle wrapper восстановлен"
-          fi
-          if [ ! -f gradle.properties ] && [ -f /tmp/gradle-backup/gradle.properties ]; then
-            cp /tmp/gradle-backup/gradle.properties .
-            echo "gradle.properties восстановлен"
-          fi
-          echo "=== Проверка ==="
-          ls -la gradlew 2>/dev/null || echo "gradlew отсутствует (будет сгенерирован позже)"
-
-      - name: 8. Fetch Modules
-        run: |
-          rm -rf app gladio vortek
-          git clone --depth 1 https://github.com/brunodev85/winlator-app app
-          git clone --depth 1 https://github.com/brunodev85/gladio gladio
-          git clone --depth 1 https://github.com/brunodev85/vortek vortek
-          rm -rf app/.git gladio/.git vortek/.git
-
-      - name: 9. Generate Gradle wrapper (если нет)
-        run: |
-          if [ ! -f gradlew ]; then
-            echo "Генерирую Gradle wrapper..."
-            if ! command -v gradle &> /dev/null; then
-              sudo apt-get update -qq && sudo apt-get install -y -qq wget unzip
-              wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip
-              sudo unzip -q gradle-8.4-bin.zip -d /opt
-              sudo ln -s /opt/gradle-8.4/bin/gradle /usr/local/bin/gradle
-            fi
-            gradle wrapper --gradle-version 8.4
-            chmod +x gradlew
-            echo "Gradle wrapper сгенерирован"
-          fi
-
-      - name: 10. Commit and Push
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "🚀 Winlator core + modules + Gradle" || echo "Нет изменений"
-          git push origin main --force
+          echo "=== Поиск APK ==="
+          find . -name "*.apk" -type f
+      
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Winlator-Debug-APK
+          path: app/app/build/outputs/apk/debug/*.apk
+      
+      - name: Create Release
+        if: success()
+        uses: softprops/action-gh-release@v1
+        with:
+          files: app/app/build/outputs/apk/debug/*.apk
+          tag_name: v${{ github.run_number }}
+          name: "Winlator Build v${{ github.run_number }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
