@@ -22,17 +22,48 @@ jobs:
       
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Create root build files
+        run: |
+          if [ ! -f settings.gradle ]; then
+            cat > settings.gradle << 'EOF'
+rootProject.name = "imperia"
+include ':app'
+project(':app').projectDir = new File('app/app')
+EOF
+          fi
+          
+          if [ ! -f build.gradle ]; then
+            cat > build.gradle << 'EOF'
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.2'
+    }
+}
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+EOF
+          fi
+          
+          echo "=== settings.gradle ==="
+          cat settings.gradle
       
-      - name: Grant execute permission
+      - name: Grant permission
         run: chmod +x gradlew
       
       - name: Build debug APK
         run: ./gradlew assembleDebug
       
       - name: Find APK
-        run: |
-          echo "=== Поиск APK ==="
-          find . -name "*.apk" -type f
+        run: find . -name "*.apk" -type f
       
       - name: Upload APK
         uses: actions/upload-artifact@v4
