@@ -86,10 +86,11 @@ android {
                 'META-INF/ASL2.0'
             ]
         }
-        // Добавляем исключение для нативных библиотек, чтобы избежать дубликатов
-        jniLibs {
-            useLegacyPackaging = true
-        }
+        // Отключаем legacy упаковку (закомментировано, чтобы ничего не удалять). 
+        // При использовании .aar библиотек этот флаг вызывает конфликты и прячет .so файлы.
+        // jniLibs {
+        //     useLegacyPackaging = true
+        // }
     }
 }
 
@@ -103,7 +104,9 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
 
     // Библиотека для распаковки .tzst архивов
-    implementation 'com.github.luben:zstd-jni:1.5.5-11'
+    // ИСПРАВЛЕНИЕ: Добавлен @aar. Теперь Gradle скачает Android-версию с готовыми .so библиотеками
+    implementation 'com.github.luben:zstd-jni:1.5.5-11@aar'
+    
     // Библиотека для работы с Tar
     implementation 'org.apache.commons:commons-compress:1.26.0'
 }
