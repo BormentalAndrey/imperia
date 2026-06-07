@@ -189,9 +189,7 @@ class SplashActivity : AppCompatActivity() {
             setupControlsProfile()
             
             val shortcut = Shortcut(container, exeFile)
-            shortcut.extraArgs = "-force-gfx-direct"
             
-            // Запуск через XServerDisplayActivity
             val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
                 putExtra("shortcut_path", shortcut.file.absolutePath)
