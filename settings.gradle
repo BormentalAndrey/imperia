@@ -1,0 +1,3 @@
+rootProject.name = "imperia"
+include ':app'
+project(':app').projectDir = new File('app/app')
