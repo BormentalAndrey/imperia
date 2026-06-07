@@ -1,6 +1,3 @@
-## Файл: `app/app/src/main/java/com/winlator/SplashActivity.kt`
-
-```kotlin
 package com.winlator
 
 import android.content.Intent
@@ -191,4 +188,3 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 }
-```
