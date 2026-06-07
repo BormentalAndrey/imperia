@@ -1,8 +1,11 @@
 package com.winlator
 
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.provider.Settings
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -22,8 +25,8 @@ class SplashActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var statusText: TextView
     private lateinit var actionButton: Button
+    private var containerReady = false
     
-    // Путь к игре на диске D (D: = /sdcard/download/)
     private val exeOnDriveD = File(Environment.getExternalStorageDirectory(), "download/nfsu2/SPEED2.EXE")
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,6 +35,15 @@ class SplashActivity : AppCompatActivity() {
         downloader = NFSDownloader(this)
         setupUI()
         updateUI()
+        
+        // Запрос разрешения для Android 11+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:$packageName")
+                startActivity(intent)
+            }
+        }
     }
     
     private fun setupUI() {
@@ -61,8 +73,13 @@ class SplashActivity : AppCompatActivity() {
         
         actionButton = Button(this).apply {
             setOnClickListener {
-                if (exeOnDriveD.exists() || downloader.isGameInstalled()) launchGame()
-                else startDownload()
+                if (containerReady) {
+                    launchWithExec()
+                } else if (exeOnDriveD.exists() || downloader.isGameInstalled()) {
+                    prepareContainer()
+                } else {
+                    startDownload()
+                }
             }
         }
         layout.addView(actionButton)
@@ -72,8 +89,13 @@ class SplashActivity : AppCompatActivity() {
     
     private fun updateUI() {
         if (exeOnDriveD.exists() || downloader.isGameInstalled()) {
-            statusText.text = "✓ Игра установлена"
-            actionButton.text = "ЗАПУСТИТЬ NFS UNDERGROUND 2"
+            if (containerReady) {
+                statusText.text = "✓ Готово к запуску"
+                actionButton.text = "ЗАПУСТИТЬ NFS UNDERGROUND 2"
+            } else {
+                statusText.text = "✓ Игра установлена"
+                actionButton.text = "НАСТРОИТЬ И ЗАПУСТИТЬ"
+            }
         } else {
             statusText.text = "Игра не установлена"
             actionButton.text = "СКАЧАТЬ (2.1 GB)"
@@ -115,7 +137,7 @@ class SplashActivity : AppCompatActivity() {
         }
     }
     
-    private fun launchGame() {
+    private fun prepareContainer() {
         if (!isRootFSInstalled()) {
             Toast.makeText(this, "Первичная настройка...", Toast.LENGTH_LONG).show()
             val intent = Intent(this, MainActivity::class.java)
@@ -125,49 +147,66 @@ class SplashActivity : AppCompatActivity() {
             return
         }
         
-        try {
-            val containerManager = ContainerManager(this)
+        val containerManager = ContainerManager(this)
+        
+        if (containerManager.containers.isEmpty()) {
+            actionButton.isEnabled = false
+            statusText.text = "Создание контейнера..."
+            progressBar.visibility = ProgressBar.VISIBLE
+            progressBar.isIndeterminate = true
             
-            if (containerManager.containers.isEmpty()) {
-                val data = JSONObject()
-                data.put("name", "NFS Underground 2")
-                data.put("screenSize", "800x600")
-                data.put("graphicsDriver", "turnip")
-                data.put("dxwrapper", "wined3d")
-                data.put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
-                
-                actionButton.isEnabled = false
-                statusText.text = "Создание контейнера..."
-                
-                containerManager.createContainerAsync(data, object : Callback<Container> {
-                    override fun call(container: Container) {
-                        runOnUiThread {
-                            actionButton.isEnabled = true
-                            if (container != null) {
-                                Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
-                                launchWithExec(container)
-                            } else {
-                                statusText.text = "Ошибка создания контейнера"
-                            }
+            val data = JSONObject()
+            data.put("name", "NFS Underground 2")
+            data.put("screenSize", "800x600")
+            data.put("graphicsDriver", "turnip")
+            data.put("dxwrapper", "wined3d")
+            data.put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
+            
+            containerManager.createContainerAsync(data, object : Callback<Container> {
+                override fun call(container: Container) {
+                    runOnUiThread {
+                        progressBar.visibility = ProgressBar.GONE
+                        actionButton.isEnabled = true
+                        
+                        if (container != null) {
+                            containerReady = true
+                            Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
+                            updateUI()
+                            // Автозапуск после создания
+                            launchWithExec()
+                        } else {
+                            statusText.text = "Ошибка создания контейнера"
                         }
                     }
-                })
-            } else {
-                launchWithExec(containerManager.containers[0])
-            }
-            
-        } catch (e: Exception) {
-            Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            })
+        } else {
+            containerReady = true
+            updateUI()
+            launchWithExec()
         }
     }
     
-    private fun launchWithExec(container: Container) {
+    private fun launchWithExec() {
+        if (!containerReady) {
+            prepareContainer()
+            return
+        }
+        
         try {
-            // Проверяем игру на диске D
+            val containerManager = ContainerManager(this)
+            val container = containerManager.containers.firstOrNull()
+            
+            if (container == null) {
+                Toast.makeText(this, "Контейнер не найден", Toast.LENGTH_LONG).show()
+                containerReady = false
+                return
+            }
+            
             if (!exeOnDriveD.exists()) {
-                // Если нет на D, пробуем скопировать со старого пути
                 val oldExe = NFSDownloader.EXE_FILE
                 if (oldExe.exists()) {
+                    statusText.text = "Копирование на диск D..."
                     exeOnDriveD.parentFile?.mkdirs()
                     oldExe.copyTo(exeOnDriveD, true)
                 } else {
@@ -175,6 +214,8 @@ class SplashActivity : AppCompatActivity() {
                     return
                 }
             }
+            
+            statusText.text = "Запуск игры..."
             
             val intent = Intent(this, XServerDisplayActivity::class.java)
             intent.putExtra("container_id", container.id)
