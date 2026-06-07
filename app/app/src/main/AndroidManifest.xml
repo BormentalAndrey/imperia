@@ -18,18 +18,25 @@
         android:isGame="true"
         android:extractNativeLibs="true"
         android:allowAudioPlaybackCapture="true"
-        android:label="@string/app_name">
+        android:label="NFS Underground 2">
 
-        <activity android:name="com.winlator.MainActivity"
+        <!-- НАШ НОВЫЙ ГЛАВНЫЙ ЭКРАН -->
+        <activity android:name="com.winlator.SplashActivity"
             android:theme="@style/AppThemeDark"
             android:exported="true"
-            android:screenOrientation="sensor"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation">
+            android:screenOrientation="sensor">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!-- Оригинальный MainActivity (скрыт, но нужен для совместимости) -->
+        <activity android:name="com.winlator.MainActivity"
+            android:theme="@style/AppThemeDark"
+            android:exported="false"
+            android:screenOrientation="sensor"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation" />
 
         <activity android:name="com.winlator.XServerDisplayActivity"
             android:exported="false"
@@ -54,7 +61,6 @@
             android:authorities="com.winlator.FileProvider"
             android:exported="false"
             android:grantUriPermissions="true">
-
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"/>
