@@ -1,0 +1,58 @@
+name: Fetch and Commit Winlator Core Files
+
+# Скрипт будет запускаться вручную по кнопке из вкладки "Actions" в GitHub
+on:
+  workflow_dispatch: 
+
+permissions:
+  contents: write # Даем права боту на пуш коммитов в ваш репозиторий
+
+jobs:
+  fetch-winlator-files:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Клонирование вашего репозитория (Imperia)
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 2. Клонирование оригинального репозитория Winlator (во временную папку)
+        run: |
+          echo "Скачиваем исходники Winlator..."
+          git clone --depth 1 https://github.com/brunodev85/winlator.git /tmp/winlator
+
+      - name: 3. Создание нужной структуры папок в Imperia
+        run: |
+          echo "Создаем директории для ядра..."
+          mkdir -p app/src/main/java/com/winlator/core
+          mkdir -p app/src/main/java/com/winlator/xserver
+
+      - name: 4. Копирование файлов (core, xserver)
+        run: |
+          echo "Переносим классы..."
+          # Копируем всё содержимое папок core и xserver, не удаляя то, что у вас уже есть
+          cp -rn /tmp/winlator/app/src/main/java/com/winlator/core/* app/src/main/java/com/winlator/core/ || true
+          cp -rn /tmp/winlator/app/src/main/java/com/winlator/xserver/* app/src/main/java/com/winlator/xserver/ || true
+          
+          # Опционально: захватим еще JNI-мосты, если они нужны для сборки C++ части
+          # cp -rn /tmp/winlator/app/src/main/cpp/* app/src/main/cpp/ || true
+
+      - name: 5. Настройка Git и автоматический Коммит
+        run: |
+          echo "Настраиваем Git бота..."
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          echo "Добавляем новые файлы в индекс..."
+          git add app/src/main/java/com/winlator/core/
+          git add app/src/main/java/com/winlator/xserver/
+          
+          # Проверяем, есть ли изменения. Если файлов не было и они добавились — коммитим.
+          if git diff-index --quiet HEAD --; then
+            echo "✅ Изменений нет, все файлы уже на месте."
+          else
+            echo "📦 Коммитим новые файлы ядра!"
+            git commit -m "🤖 Автоматический перенос файлов ядра Winlator (core, xserver)"
+            git push
+          fi
