@@ -1,6 +1,53 @@
-- name: Copy tzst to assets
-  run: |
-    mkdir -p app/src/main/assets/components
-    cp installable_components/box64/box64-0.3.7.tzst app/src/main/assets/components/
-    cp installable_components/turnip/turnip-24.1.0.tzst app/src/main/assets/components/
-    cp installable_components/dxvk/dxvk-1.7.2.tzst app/src/main/assets/components/
+name: Copy Winlator Resources
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  copy-resources:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout imperia
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clone Winlator with submodules
+        run: |
+          git clone --recursive --depth 1 https://github.com/brunodev85/Winlator.git /tmp/win
+
+      - name: Copy all resources
+        run: |
+          echo "=== Копируем res ==="
+          cp -r /tmp/win/app/app/src/main/res/* app/src/main/res/
+          
+          echo "=== Копируем assets ==="
+          cp -r /tmp/win/app/app/src/main/assets/* app/src/main/assets/ 2>/dev/null || echo "Нет assets"
+          
+          echo "=== Копируем AndroidManifest (для справки) ==="
+          cp /tmp/win/app/app/src/main/AndroidManifest.xml app/src/main/AndroidManifest_winlator.xml 2>/dev/null || echo "Нет манифеста"
+          
+          echo ""
+          echo "=== Скопированные файлы ==="
+          find app/src/main/res -type f | wc -l
+          echo "ресурсов"
+          find app/src/main/assets -type f 2>/dev/null | wc -l
+          echo "ассетов"
+
+      - name: Commit and push
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add app/src/main/res/
+          git add app/src/main/assets/
+          
+          if git diff --staged --quiet; then
+            echo "Нет изменений"
+          else
+            git commit -m "🤖 Ресурсы и ассеты Winlator"
+            git push origin main
+          fi
