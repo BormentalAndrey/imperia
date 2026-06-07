@@ -19,21 +19,17 @@ jobs:
           curl -s https://api.github.com/repos/brunodev85/Winlator/releases/latest > release.json
           TAG=$(grep '"tag_name"' release.json | head -1 | cut -d'"' -f4)
           echo "Тег: $TAG"
-          
-          # Скачиваем ZIP исходников по тегу
           wget -O winlator.zip "https://github.com/brunodev85/Winlator/archive/refs/tags/${TAG}.zip"
 
       - name: 2. Extract archive
         run: |
           unzip -q winlator.zip
           ROOT_DIR=$(find . -maxdepth 1 -type d -iname "winlator-*" | head -1)
-          # Очищаем имя от спецсимволов пути
           ROOT_DIR=$(basename "$ROOT_DIR")
           echo "ROOT_DIR=$ROOT_DIR" >> $GITHUB_ENV
 
-      - name: 3. Clear old Imperia code (Safely)
+      - name: 3. Clear old Imperia code
         run: |
-          # Удаляем старое, сохраняя .git (историю), .github (ваши скрипты) и скачанный архив
           find . -mindepth 1 -maxdepth 1 \
             -not -name '.git' \
             -not -name '.github' \
@@ -50,31 +46,33 @@ jobs:
 
       - name: 5. Fetch Modules (app, gladio, vortek)
         run: |
-          # В архиве это просто пустые папки-заглушки. Удаляем их.
           rm -rf app gladio vortek
-          
-          # Клонируем реальный код (без возни с submodules)
           git clone --depth 1 https://github.com/brunodev85/winlator-app app
           git clone --depth 1 https://github.com/brunodev85/gladio gladio
           git clone --depth 1 https://github.com/brunodev85/vortek vortek
-          
-          # Удаляем .git внутри них. Теперь это часть вашего кода!
           rm -rf app/.git gladio/.git vortek/.git
 
-      - name: 6. Setup Gradle
+      - name: 6. Setup Gradle wrapper
         run: |
-          # Поднимаем gradlew в корень проекта, чтобы Android Studio не ругалась
-          if [ ! -f gradlew ] && [ -f app/gradlew ]; then
-            cp -r app/gradle .
-            cp app/gradlew .
-            chmod +x gradlew
+          # Скачиваем Gradle если не установлен
+          if ! command -v gradle &> /dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq wget unzip
+            wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip
+            sudo unzip -q gradle-8.4-bin.zip -d /opt
+            sudo ln -s /opt/gradle-8.4/bin/gradle /usr/local/bin/gradle
           fi
+          
+          # Генерируем wrapper
+          gradle wrapper --gradle-version 8.4
+          chmod +x gradlew
+          
+          echo "=== Проверка ==="
+          ./gradlew --version
 
       - name: 7. Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
           git add -A
-          git commit -m "🚀 Троянский конь: Установлено полное ядро Winlator" || echo "Изменений нет"
+          git commit -m "🚀 Полное ядро Winlator + Gradle wrapper" || echo "Изменений нет"
           git push origin main
