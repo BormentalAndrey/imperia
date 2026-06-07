@@ -1,68 +1,21 @@
-plugins {
-    id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
-}
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
 
-task copyEmulatorComponents(type: Copy) {
-    from '../installable_components/box64/box64-0.3.7.tzst'
-    from '../installable_components/turnip/turnip-24.1.0.tzst'
-    from '../installable_components/dxvk/dxvk-1.7.2.tzst'
-    into 'src/main/assets/components/'
-}
-
-preBuild.dependsOn(copyEmulatorComponents)
-
-android {
-    namespace 'com.winlator'
-    compileSdk 34
-
-    defaultConfig {
-        applicationId "com.imperia.emulator"
-        minSdk 26
-        targetSdk 34
-        versionCode 1
-        versionName "1.0.0"
-        
-        ndk {
-            abiFilters 'arm64-v8a'
-        }
+buildscript {
+    repositories {
+        mavenCentral()
+        google()
     }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.2.2'
 
-    buildTypes {
-        debug {
-            minifyEnabled false
-            debuggable true
-        }
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = '17'
-    }
-    
-    packagingOptions {
-        pickFirst '**/libzstd-jni.so'
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
     }
 }
 
-dependencies {
-    implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
-    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
-    implementation 'androidx.preference:preference:1.2.1'
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation 'com.github.luben:zstd-jni:1.5.5-11@aar'
-    implementation 'org.apache.commons:commons-compress:1.26.0'
+allprojects {
+    repositories {
+        mavenCentral()
+        google()
+    }
 }
