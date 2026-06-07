@@ -12,71 +12,80 @@ jobs:
       contents: write
     
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
       
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle' # Включаем кэширование для ускорения повторных сборок
       
-      - name: Setup Android SDK
+      - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
+        with:
+          lineage: 'stable'
+          # Ubuntu-runners уже имеют NDK, но этот шаг гарантирует его правильную инициализацию
 
-      - name: Create root build files
+      - name: Create Correct Multi-Module Build Files
         run: |
-          if [ ! -f settings.gradle ]; then
-            cat > settings.gradle << 'EOF'
-rootProject.name = "imperia"
-include ':app'
-project(':app').projectDir = new File('app/app')
-EOF
-          fi
+          # Создаем правильный settings.gradle, связывающий все 3 модуля вместе
+          cat > settings.gradle << 'EOF'
+          rootProject.name = "imperia"
           
-          if [ ! -f build.gradle ]; then
-            cat > build.gradle << 'EOF'
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.2'
-    }
-}
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-EOF
-          fi
+          include ':app', ':gladio', ':vortek'
           
-          echo "=== settings.gradle ==="
+          project(':app').projectDir = new File('app/app')
+          project(':gladio').projectDir = new File('gladio')
+          project(':vortek').projectDir = new File('vortek')
+          EOF
+          
+          # Создаем корневой build.gradle
+          cat > build.gradle << 'EOF'
+          buildscript {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.2.2'
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          EOF
+          
+          echo "=== Проверка конфигурации проекта ==="
           cat settings.gradle
-      
-      - name: Grant permission
+
+      - name: Grant Execute Permission for Gradle
         run: chmod +x gradlew
       
-      - name: Build debug APK
-        run: ./gradlew assembleDebug
+      - name: Build Debug APK with Gradle
+        run: ./gradlew :app:assembleDebug --stacktrace
       
-      - name: Find APK
-        run: find . -name "*.apk" -type f
+      - name: Find Generated APK
+        run: |
+          echo "=== Поиск собранного APK ==="
+          find . -name "*.apk" -type f
       
-      - name: Upload APK
+      - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Winlator-Debug-APK
+          name: Imperia-Winlator-Debug
           path: app/app/build/outputs/apk/debug/*.apk
       
-      - name: Create Release
-        if: success()
-        uses: softprops/action-gh-release@v1
+      - name: Create GitHub Release
+        if: success() && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
         with:
           files: app/app/build/outputs/apk/debug/*.apk
           tag_name: v${{ github.run_number }}
-          name: "Winlator Build v${{ github.run_number }}"
+          name: "Imperia Engine Build v${{ github.run_number }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
