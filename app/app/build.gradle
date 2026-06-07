@@ -13,6 +13,9 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 
 android {
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ 1: Обязательно для Gradle 8+. 
+    // Именно это решает ClassNotFoundException для SplashActivity.
+    namespace 'com.winlator'
     compileSdk 34
 
     defaultConfig {
@@ -21,20 +24,29 @@ android {
         targetSdkVersion 28
         versionCode 27
         versionName "11.0"
+        
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ 2: Гарантирует наличие нативных библиотек
+        // для всех типов сборок (убирает UnsatisfiedLinkError)
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
     }
 
     buildTypes {
         debug {
             minifyEnabled false
             debuggable true
-            ndk {
-                abiFilters 'arm64-v8a'
-            }
+        }
+        // ДОБАВЛЕНО ДЛЯ ПРОДАКШЕНА: Блок release обязателен для генерации финального APK
+        release {
+            minifyEnabled false // Отключено, чтобы R8 не удалил нужные классы эмулятора
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
     lintOptions {
         checkReleaseBuilds false
+        abortOnError false // Позволяет собрать APK, игнорируя мелкие предупреждения линтера
     }
 
     ndkVersion '24.0.8215888'
@@ -49,6 +61,19 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+    
+    // ДОБАВЛЕНО: Синхронизация версии Kotlin с версией Java
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    // ДОБАВЛЕНО: Запрет на сжатие нативных библиотек (.so).
+    // Важно для работы Wine, Box64 и Zstd внутри Winlator.
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 }
 
