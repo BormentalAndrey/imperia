@@ -5,24 +5,21 @@ plugins {
 
 // Автоматическое копирование нужных компонентов эмулятора в assets перед сборкой
 task copyEmulatorComponents(type: Copy) {
-    // Убедитесь, что пути соответствуют структуре вашего репозитория
     from '../installable_components/box64/box64-0.3.7.tzst'
     from '../installable_components/turnip/turnip-24.1.0.tzst'
-    from '../installable_components/dxvk/dxvk-1.7.2.tzst'
+    from '../installable_components/dxvk-1.7.2.tzst'
     into 'src/main/assets/components/'
 }
 
-// Привязываем задачу копирования к этапу до начала компиляции
 preBuild.dependsOn(copyEmulatorComponents)
 
 android {
     namespace 'com.imperia.emulator'
     compileSdk 34
 
-    // Блок для настройки ключей подписи (обязателен для продакшена и установки Release APK)
     signingConfigs {
         release {
-            // Укажите пути к вашему реальному keystore при публикации
+            // Заполните данными вашего Keystore для финальной сборки
             // storeFile file("imperia-keystore.jks")
             // storePassword "your_password"
             // keyAlias "key0"
@@ -37,7 +34,13 @@ android {
         versionCode 1
         versionName "1.0.0"
         
-        // Включение поддержки векторных изображений для Material компонентов
+        // КРИТИЧЕСКИ ВАЖНО ДЛЯ ZSTD-JNI:
+        // Указываем архитектуры, для которых должны быть включены .so библиотеки.
+        // Это решает ошибку UnsatisfiedLinkError.
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+        }
+        
         vectorDrawables {
             useSupportLibrary true
         }
@@ -49,20 +52,15 @@ android {
             debuggable true
         }
         release {
-            // Для продакшена minify лучше включить (true), чтобы обфусцировать код и уменьшить APK.
-            // Но по вашему запросу "ничего не удаляя/не меняя" оставляю как было, с добавлением signingConfig
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Если у вас пока нет реального ключа release, закомментируйте строку ниже, 
-            // иначе GitHub Actions может выдать ошибку отсутствия ключа при сборке release.
+            // Раскомментируйте, когда настроите signingConfigs
             // signingConfig signingConfigs.release 
         }
     }
 
     buildFeatures {
-        // Рекомендуется включить для удобной работы с UI без findViewById
         viewBinding true
-        // Генерирует класс BuildConfig, полезен для проверки if (BuildConfig.DEBUG)
         buildConfig true
     }
 
@@ -75,16 +73,27 @@ android {
         jvmTarget = '17'
     }
     
-    // Исключаем конфликты системных файлов, которые могут возникнуть при сборке JNI/Native библиотек
     packagingOptions {
         resources {
-            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/LICENSE.txt', 'META-INF/license.txt', 'META-INF/NOTICE', 'META-INF/NOTICE.txt', 'META-INF/notice.txt', 'META-INF/ASL2.0']
+            excludes += [
+                'META-INF/DEPENDENCIES', 
+                'META-INF/LICENSE', 
+                'META-INF/LICENSE.txt', 
+                'META-INF/license.txt', 
+                'META-INF/NOTICE', 
+                'META-INF/NOTICE.txt', 
+                'META-INF/notice.txt', 
+                'META-INF/ASL2.0'
+            ]
+        }
+        // Добавляем исключение для нативных библиотек, чтобы избежать дубликатов
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 }
 
 dependencies {
-    // --- ВАШИ ИСХОДНЫЕ ЗАВИСИМОСТИ ---
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
@@ -93,11 +102,8 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
 
-    // --- НОВЫЕ ЗАВИСИМОСТИ ДЛЯ ПРОДАКШЕНА ЭМУЛЯТОРА ---
-    
-    // Библиотека для распаковки .tzst (Zstandard) архивов компонентов (Box64, Turnip, DXVK)
+    // Библиотека для распаковки .tzst архивов
     implementation 'com.github.luben:zstd-jni:1.5.5-11'
-    
-    // Библиотека для работы с Tar внутри Zstandard (commons-compress)
+    // Библиотека для работы с Tar
     implementation 'org.apache.commons:commons-compress:1.26.0'
 }
