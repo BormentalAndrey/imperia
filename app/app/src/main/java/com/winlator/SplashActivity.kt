@@ -13,6 +13,7 @@ import androidx.preference.PreferenceManager
 import com.winlator.container.Container
 import com.winlator.container.ContainerManager
 import com.winlator.container.Shortcut
+import com.winlator.core.Callback
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -163,44 +164,63 @@ class SplashActivity : AppCompatActivity() {
     }
     
     private fun launchGame() {
-        try {
-            val containerManager = ContainerManager(this)
-            
-            var container = containerManager.containers.firstOrNull { it.name == "NFS Underground 2" }
-            
-            if (container == null) {
-                val nextId = (containerManager.containers.maxOfOrNull { it.id } ?: 0) + 1
-                container = Container(nextId)
-                container.name = "NFS Underground 2"
-                container.screenSize = "800x600"
-                container.graphicsDriver = "turnip"
-                container.dxWrapper = "wined3d"
-                container.envVars = "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5"
-                containerManager.containers.add(container)
-                Toast.makeText(this, "Контейнер настроен!", Toast.LENGTH_SHORT).show()
-            }
-            
-            val exeFile = NFSDownloader.EXE_FILE
-            if (!exeFile.exists()) {
-                Toast.makeText(this, "Файл не найден:\n${exeFile.absolutePath}", Toast.LENGTH_LONG).show()
-                return
-            }
-            
-            setupControlsProfile()
-            
-            val shortcut = Shortcut(container, exeFile)
-            
-            val intent = Intent(this, XServerDisplayActivity::class.java).apply {
-                putExtra("container_id", container.id)
-                putExtra("shortcut_path", shortcut.file.absolutePath)
-            }
-            
-            startActivity(intent)
-            finish()
-            
-        } catch (e: Exception) {
-            Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
-            e.printStackTrace()
+        val containerManager = ContainerManager(this)
+        
+        // Ищем существующий контейнер
+        val existingContainer = containerManager.containers.firstOrNull { 
+            it.name == "NFS Underground 2" 
         }
+        
+        if (existingContainer != null) {
+            launchWithContainer(existingContainer)
+            return
+        }
+        
+        // Создаём новый через Winlator API
+        val data = JSONObject().apply {
+            put("name", "NFS Underground 2")
+            put("screenSize", "800x600")
+            put("graphicsDriver", "turnip")
+            put("dxwrapper", "wined3d")
+            put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
+        }
+        
+        actionButton.isEnabled = false
+        statusText.text = "Создание контейнера..."
+        
+        containerManager.createContainerAsync(data, object : Callback<Container> {
+            override fun call(container: Container) {
+                runOnUiThread {
+                    actionButton.isEnabled = true
+                    if (container != null) {
+                        Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
+                        launchWithContainer(container)
+                    } else {
+                        statusText.text = "Ошибка создания контейнера"
+                        Toast.makeText(this@SplashActivity, "Не удалось создать контейнер", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        })
+    }
+    
+    private fun launchWithContainer(container: Container) {
+        val exeFile = NFSDownloader.EXE_FILE
+        if (!exeFile.exists()) {
+            Toast.makeText(this, "Файл не найден:\n${exeFile.absolutePath}", Toast.LENGTH_LONG).show()
+            return
+        }
+        
+        setupControlsProfile()
+        
+        val shortcut = Shortcut(container, exeFile)
+        
+        val intent = Intent(this, XServerDisplayActivity::class.java).apply {
+            putExtra("container_id", container.id)
+            putExtra("shortcut_path", shortcut.file.absolutePath)
+        }
+        
+        startActivity(intent)
+        finish()
     }
 }
