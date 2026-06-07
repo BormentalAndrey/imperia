@@ -1,69 +1,78 @@
-name: Fetch and Commit Winlator Core Files
+name: Sync Winlator Core
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  fetch-winlator-files:
+  sync-files:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 1. Клонирование вашего репозитория (Imperia)
+      - name: Checkout local repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 2. Клонирование оригинального репозитория Winlator
-        run: |
-          echo "Скачиваем исходники Winlator..."
-          git clone --depth 1 https://github.com/brunodev85/winlator.git /tmp/winlator
+      - name: Clone source Winlator
+        run: git clone --depth 1 https://github.com/brunodev85/winlator.git /tmp/winlator
 
-      - name: 3. Создание нужной структуры папок в Imperia
+      - name: Copy Winlator Java files
         run: |
+          # Создаём все нужные папки
           mkdir -p app/src/main/java/com/winlator/core
           mkdir -p app/src/main/java/com/winlator/xserver
+          mkdir -p app/src/main/java/com/winlator/wine
+          mkdir -p app/src/main/java/com/winlator/box86
+          mkdir -p app/src/main/java/com/winlator/box64
+          mkdir -p app/src/main/java/com/winlator/widget
+          mkdir -p app/src/main/java/com/winlator/utils
+          mkdir -p app/src/main/java/com/winlator/controls
+          mkdir -p app/src/main/java/com/winlator/recyclerview
+          mkdir -p app/src/main/java/com/winlator/container
 
-      - name: 4. Умный поиск и копирование файлов
-        run: |
-          echo "Ищем фактическое расположение папок в Winlator..."
-          
-          # Динамический поиск папок core и xserver
-          CORE_DIR=$(find /tmp/winlator -type d -path "*/com/winlator/core" | head -n 1)
-          XSERVER_DIR=$(find /tmp/winlator -type d -path "*/com/winlator/xserver" | head -n 1)
-          
-          echo "Найден путь к core: $CORE_DIR"
-          echo "Найден путь к xserver: $XSERVER_DIR"
-          
-          # Копируем содержимое найденных папок (используем /. для надежного копирования всех файлов)
-          if [ -n "$CORE_DIR" ]; then
-            cp -R "$CORE_DIR"/. app/src/main/java/com/winlator/core/
-            echo "✅ Файлы core успешно скопированы."
-          else
-            echo "❌ Папка core не найдена! Вывожу структуру для отладки:"
-            find /tmp/winlator -type d -name "*winlator*"
-          fi
-          
-          if [ -n "$XSERVER_DIR" ]; then
-            cp -R "$XSERVER_DIR"/. app/src/main/java/com/winlator/xserver/
-            echo "✅ Файлы xserver успешно скопированы."
-          else
-            echo "❌ Папка xserver не найдена!"
-          fi
+          # Копируем все пакеты com.winlator
+          find /tmp/winlator -type d -path "*/com/winlator/*" | while read dir; do
+            relative_path=$(echo "$dir" | sed 's|.*/com/winlator/||')
+            if [ -n "$relative_path" ]; then
+              mkdir -p "app/src/main/java/com/winlator/$relative_path"
+              cp -R "$dir"/* "app/src/main/java/com/winlator/$relative_path/" 2>/dev/null || true
+            fi
+          done
 
-      - name: 5. Настройка Git и автоматический Коммит
+          # Показываем что скопировали
+          find app/src/main/java/com/winlator -type f | sort
+
+      - name: Copy native libraries
         run: |
-          echo "Настраиваем Git бота..."
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          mkdir -p app/src/main/jniLibs/armeabi-v7a
+          
+          # Ищем и копируем .so файлы
+          find /tmp/winlator -name "*.so" -type f | while read lib; do
+            # Определяем архитектуру
+            if echo "$lib" | grep -q "arm64-v8a\|aarch64"; then
+              cp "$lib" app/src/main/jniLibs/arm64-v8a/
+            elif echo "$lib" | grep -q "armeabi-v7a\|armv7"; then
+              cp "$lib" app/src/main/jniLibs/armeabi-v7a/
+            fi
+          done
+
+          # Показываем что скопировали
+          find app/src/main/jniLibs -type f | sort
+
+      - name: Commit and Push
+        run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          git add app/src/main/java/com/winlator/core/
-          git add app/src/main/java/com/winlator/xserver/
+          git add app/src/main/java/com/winlator/
+          git add app/src/main/jniLibs/
           
-          if git diff-index --quiet HEAD --; then
-            echo "🤷 Изменений нет, все файлы уже на месте или ничего не скопировано."
+          if git diff --staged --quiet; then
+            echo "Нет изменений для коммита."
           else
-            echo "📦 Коммитим новые файлы ядра!"
-            git commit -m "🤖 Умный перенос файлов ядра Winlator (core, xserver)"
-            git push
+            git commit -m "🤖 Полная синхронизация Winlator: java + native libs"
+            git push origin main
           fi
