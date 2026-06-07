@@ -255,6 +255,8 @@ public abstract class WineUtils {
     }
 
     public static String unixToDOSPath(String unixPath, Container container) {
+        if (unixPath == null || unixPath.isEmpty()) return "C:\\";
+        
         String dosPath = "";
         String driveLetter = "";
 
@@ -274,8 +276,13 @@ public abstract class WineUtils {
             }
         }
 
-        if (!dosPath.startsWith("\\")) dosPath += "\\";
-        dosPath = driveLetter+StringUtils.removeEndSlash(dosPath);
+        if (dosPath.isEmpty()) {
+            driveLetter = "Z:";
+            dosPath = unixPath.replace("/", "\\");
+        }
+
+        if (!dosPath.startsWith("\\")) dosPath = "\\" + dosPath;
+        dosPath = driveLetter + StringUtils.removeEndSlash(dosPath);
         if (dosPath.equals(driveLetter)) dosPath += "\\";
         return dosPath;
     }
