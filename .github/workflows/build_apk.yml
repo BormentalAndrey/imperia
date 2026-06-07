@@ -27,7 +27,9 @@ jobs:
 
       - name: Create Correct Multi-Module Build Files
         run: |
-          # 1. Настройка модулей
+          echo "=== ГЕНЕРАЦИЯ СТРУКТУРЫ ПРОЕКТА И СВОЙСТВ СБОРКИ ==="
+          
+          # 1. Настройка структуры модулей движка
           cat > settings.gradle << 'EOF'
           rootProject.name = "imperia"
           include ':app', ':gladio', ':vortek'
@@ -36,7 +38,7 @@ jobs:
           project(':vortek').projectDir = new File('vortek')
           EOF
           
-          # 2. Настройка корневого build.gradle
+          # 2. Корневой билд-скрипт (AGP 8.2.2)
           cat > build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -55,15 +57,20 @@ jobs:
           }
           EOF
 
-          # 3. Лечение ошибки "constant expression required" + выделение памяти под компиляцию C++
+          # 3. Полный gradle.properties со всеми исправлениями (AndroidX + Final IDs + Memory)
           cat > gradle.properties << 'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
           android.nonFinalResIds=false
-          org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m
+          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+UseParallelGC
+          org.gradle.parallel=true
+          org.gradle.caching=true
+          android.suppressUnsupportedCompileSdk=34
           EOF
 
       - name: Patch Missing Namespaces for AGP 8.x
         run: |
-          echo "=== Автоматическое исправление namespace для совместимости с AGP 8.x ==="
+          echo "=== АВТОМАТИЧЕСКОЕ ИСПРАВЛЕНИЕ NAMESPACE В МОДУЛЯХ ==="
           
           patch_namespace() {
               local module_dir=$1
@@ -91,7 +98,7 @@ jobs:
       
       - name: Find Generated APK
         run: |
-          echo "=== Поиск собранного APK ==="
+          echo "=== ПОИСК СОБРАННОГО APK ==="
           find . -name "*.apk" -type f
       
       - name: Upload APK to Artifacts
