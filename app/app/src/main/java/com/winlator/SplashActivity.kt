@@ -111,13 +111,11 @@ class SplashActivity : AppCompatActivity() {
         )
     }
     
-    // ИСПРАВЛЕНИЕ: Прямая генерация профиля через JSON (исключает ошибки компилятора JNI/Views)
     private fun setupControlsProfile() {
         try {
             val profilesDir = File(filesDir, "input_profiles")
             if (!profilesDir.exists()) profilesDir.mkdirs()
             
-            // Используем .icp формат, стандартный для Winlator
             val profileFile = File(profilesDir, "NFS_U2.icp")
             
             if (!profileFile.exists()) {
@@ -126,7 +124,6 @@ class SplashActivity : AppCompatActivity() {
                 json.put("name", "NFS U2")
                 val elements = JSONArray()
                 
-                // Вспомогательная функция для генерации кнопок
                 fun addButton(id: Int, key: Int, name: String, x: Double, y: Double) {
                     val btn = JSONObject()
                     btn.put("id", id)
@@ -157,7 +154,6 @@ class SplashActivity : AppCompatActivity() {
                 profileFile.writeText(json.toString())
             }
             
-            // Активируем профиль через SharedPreferences Winlator
             val prefs = PreferenceManager.getDefaultSharedPreferences(this)
             prefs.edit().putString("controls_profile", "NFS_U2").apply()
             
@@ -166,35 +162,21 @@ class SplashActivity : AppCompatActivity() {
         }
     }
     
-    // ИСПРАВЛЕНИЕ: Корректное использование ContainerManager и запуск через X11Activity
     private fun launchGame() {
         try {
             val containerManager = ContainerManager(this)
             
-            // Ищем контейнер, если нет — создаем правильно
             var container = containerManager.containers.firstOrNull { it.name == "NFS Underground 2" }
             
             if (container == null) {
-                // Вычисляем новый ID
                 val nextId = (containerManager.containers.maxOfOrNull { it.id } ?: 0) + 1
                 container = Container(nextId)
                 container.name = "NFS Underground 2"
                 container.screenSize = "800x600"
                 container.graphicsDriver = "turnip"
                 container.dxWrapper = "wined3d"
-                
-                // envVars ожидает строку, а не Map
                 container.envVars = "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5"
-                
                 containerManager.containers.add(container)
-                
-                // Безопасное сохранение (учитывая разницу версий Winlator API)
-                try {
-                    container.javaClass.getMethod("saveData").invoke(container)
-                } catch (e: Exception) {
-                    // Игнорируем, если в этой версии Winlator сохранение работает иначе
-                }
-                
                 Toast.makeText(this, "Контейнер настроен!", Toast.LENGTH_SHORT).show()
             }
             
@@ -204,21 +186,13 @@ class SplashActivity : AppCompatActivity() {
                 return
             }
             
-            // Подготавливаем кнопки перед запуском
             setupControlsProfile()
             
-            // Создаем ярлык с правильным параметром (extraArgs)
             val shortcut = Shortcut(container, exeFile)
-            shortcut.extraArgs = "-force-gfx-direct" 
+            shortcut.extraArgs = "-force-gfx-direct"
             
-            try {
-                shortcut.save()
-            } catch (e: Exception) {
-                // Игнорируем, если метод сохранения ярлыка изменился
-            }
-            
-            // Запуск: Winlator требует запускать именно X11Activity
-            val intent = Intent(this, com.winlator.X11Activity::class.java).apply {
+            // Запуск через XServerDisplayActivity
+            val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
                 putExtra("shortcut_path", shortcut.file.absolutePath)
             }
