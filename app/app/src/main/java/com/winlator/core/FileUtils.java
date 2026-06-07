@@ -241,9 +241,10 @@ public abstract class FileUtils {
     }
 
     public static String getName(String path) {
-        if (path == null) return "";
+        if (path == null || path.isEmpty()) return "";
         path = StringUtils.removeEndSlash(path);
         int index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+        if (index < 0) return path;
         return path.substring(index + 1);
     }
 
