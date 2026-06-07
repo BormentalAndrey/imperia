@@ -2,6 +2,7 @@ package com.winlator
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Environment
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -21,6 +22,9 @@ class SplashActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var statusText: TextView
     private lateinit var actionButton: Button
+    
+    // Путь к игре на диске D (D: = /sdcard/download/)
+    private val exeOnDriveD = File(Environment.getExternalStorageDirectory(), "download/nfsu2/SPEED2.EXE")
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,7 +61,7 @@ class SplashActivity : AppCompatActivity() {
         
         actionButton = Button(this).apply {
             setOnClickListener {
-                if (downloader.isGameInstalled()) launchGame()
+                if (exeOnDriveD.exists() || downloader.isGameInstalled()) launchGame()
                 else startDownload()
             }
         }
@@ -67,7 +71,7 @@ class SplashActivity : AppCompatActivity() {
     }
     
     private fun updateUI() {
-        if (downloader.isGameInstalled()) {
+        if (exeOnDriveD.exists() || downloader.isGameInstalled()) {
             statusText.text = "✓ Игра установлена"
             actionButton.text = "ЗАПУСТИТЬ NFS UNDERGROUND 2"
         } else {
@@ -159,25 +163,22 @@ class SplashActivity : AppCompatActivity() {
     
     private fun launchWithExec(container: Container) {
         try {
-            val exeFile = NFSDownloader.EXE_FILE
-            if (!exeFile.exists()) {
-                Toast.makeText(this, "Файл не найден:\n${exeFile.absolutePath}", Toast.LENGTH_LONG).show()
-                return
-            }
-            
-            val gameDirInContainer = File(container.rootDir, ".wine/drive_c/Games/NFS_U2")
-            val exeInContainer = File(gameDirInContainer, "SPEED2.EXE")
-            
-            if (!exeInContainer.exists()) {
-                statusText.text = "Копирование игры в контейнер..."
-                gameDirInContainer.mkdirs()
-                NFSDownloader.GAME_DIR.copyRecursively(gameDirInContainer, true)
-                statusText.text = "✓ Игра установлена"
+            // Проверяем игру на диске D
+            if (!exeOnDriveD.exists()) {
+                // Если нет на D, пробуем скопировать со старого пути
+                val oldExe = NFSDownloader.EXE_FILE
+                if (oldExe.exists()) {
+                    exeOnDriveD.parentFile?.mkdirs()
+                    oldExe.copyTo(exeOnDriveD, true)
+                } else {
+                    Toast.makeText(this, "Файл не найден\nПоложите игру в:\n/sdcard/download/nfsu2/", Toast.LENGTH_LONG).show()
+                    return
+                }
             }
             
             val intent = Intent(this, XServerDisplayActivity::class.java)
             intent.putExtra("container_id", container.id)
-            intent.putExtra("exec_path", "C:\\Games\\NFS_U2\\SPEED2.EXE")
+            intent.putExtra("exec_path", "D:\\nfsu2\\SPEED2.EXE")
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             
             startActivity(intent)
