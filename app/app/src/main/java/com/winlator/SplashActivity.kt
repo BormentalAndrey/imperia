@@ -12,7 +12,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.PreferenceManager
 import com.winlator.container.Container
 import com.winlator.container.ContainerManager
-import com.winlator.container.Shortcut
 import com.winlator.core.Callback
 import org.json.JSONArray
 import org.json.JSONObject
@@ -176,7 +175,7 @@ class SplashActivity : AppCompatActivity() {
             }
             
             if (existingContainer != null) {
-                launchWithContainer(existingContainer)
+                launchWithExec(existingContainer)
                 return
             }
             
@@ -196,7 +195,7 @@ class SplashActivity : AppCompatActivity() {
                         actionButton.isEnabled = true
                         if (container != null) {
                             Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
-                            launchWithContainer(container)
+                            launchWithExec(container)
                         } else {
                             statusText.text = "Ошибка создания контейнера"
                             Toast.makeText(this@SplashActivity, "Не удалось создать контейнер", Toast.LENGTH_LONG).show()
@@ -211,7 +210,7 @@ class SplashActivity : AppCompatActivity() {
         }
     }
     
-    private fun launchWithContainer(container: Container) {
+    private fun launchWithExec(container: Container) {
         try {
             val exeFile = NFSDownloader.EXE_FILE
             if (!exeFile.exists()) {
@@ -221,16 +220,9 @@ class SplashActivity : AppCompatActivity() {
             
             setupControlsProfile()
             
-            val shortcut = Shortcut(container, exeFile)
-            
-            if (shortcut.file == null || !shortcut.file.exists()) {
-                Toast.makeText(this, "Ошибка создания ярлыка", Toast.LENGTH_LONG).show()
-                return
-            }
-            
             val intent = Intent(this, XServerDisplayActivity::class.java)
             intent.putExtra("container_id", container.id)
-            intent.putExtra("shortcut_path", shortcut.file.absolutePath)
+            intent.putExtra("exec_path", exeFile.absolutePath)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             
             startActivity(intent)
