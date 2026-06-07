@@ -25,11 +25,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Create Correct Multi-Module Build Files
+      - name: Create Structure and Build Files
         run: |
-          echo "=== ГЕНЕРАЦИЯ СТРУКТУРЫ ПРОЕКТА И СВОЙСТВ СБОРКИ ==="
+          echo "=== ГЕНЕРАЦИЯ СТРУКТУРЫ МОДУЛЕЙ ==="
           
-          # 1. Настройка структуры модулей движка
+          # Настройка структуры модулей движка
           cat > settings.gradle << 'EOF'
           rootProject.name = "imperia"
           include ':app', ':gladio', ':vortek'
@@ -38,7 +38,7 @@ jobs:
           project(':vortek').projectDir = new File('vortek')
           EOF
           
-          # 2. Корневой билд-скрипт (AGP 8.2.2)
+          # Корневой билд-скрипт (AGP 8.2.2)
           cat > build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -55,17 +55,6 @@ jobs:
                   mavenCentral()
               }
           }
-          EOF
-
-          # 3. Полный gradle.properties со всеми исправлениями (AndroidX + Final IDs + Memory)
-          cat > gradle.properties << 'EOF'
-          android.useAndroidX=true
-          android.enableJetifier=true
-          android.nonFinalResIds=false
-          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+UseParallelGC
-          org.gradle.parallel=true
-          org.gradle.caching=true
-          android.suppressUnsupportedCompileSdk=34
           EOF
 
       - name: Patch Missing Namespaces for AGP 8.x
