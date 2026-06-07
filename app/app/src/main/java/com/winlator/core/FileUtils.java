@@ -242,7 +242,6 @@ public abstract class FileUtils {
 
     public static String getName(String path) {
         if (path == null || path.isEmpty()) return "";
-        path = StringUtils.removeEndSlash(path);
         int index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
         if (index < 0) return path;
         return path.substring(index + 1);
@@ -254,7 +253,6 @@ public abstract class FileUtils {
 
     public static String getDirname(String path) {
         if (path == null || path.isEmpty()) return "";
-        path = StringUtils.removeEndSlash(path);
         int index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
         if (index <= 0) return path;
         return path.substring(0, index);
