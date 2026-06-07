@@ -28,17 +28,23 @@ jobs:
           ROOT_DIR=$(basename "$ROOT_DIR")
           echo "ROOT_DIR=$ROOT_DIR" >> $GITHUB_ENV
 
-      - name: 3. Backup Gradle wrapper files
+      - name: 3. Remove conflicting folders from archive
+        run: |
+          # Удаляем папки которые есть в корне и конфликтуют
+          rm -rf "$ROOT_DIR/.github"
+          rm -rf "$ROOT_DIR/.git"
+          echo "Конфликтующие папки удалены из архива"
+
+      - name: 4. Backup Gradle wrapper
         run: |
           mkdir -p /tmp/gradle-backup
-          cp -r gradle /tmp/gradle-backup/ 2>/dev/null || true
-          cp gradlew /tmp/gradle-backup/ 2>/dev/null || true
-          cp gradlew.bat /tmp/gradle-backup/ 2>/dev/null || true
-          cp gradle.properties /tmp/gradle-backup/ 2>/dev/null || true
-          echo "Сохранено:"
-          ls -la /tmp/gradle-backup/
+          cp -r gradle /tmp/gradle-backup/ 2>/dev/null
+          cp gradlew /tmp/gradle-backup/ 2>/dev/null
+          cp gradlew.bat /tmp/gradle-backup/ 2>/dev/null
+          cp gradle.properties /tmp/gradle-backup/ 2>/dev/null
+          echo "Gradle backup создан"
 
-      - name: 4. Clear old Imperia code
+      - name: 5. Clear repository
         run: |
           find . -mindepth 1 -maxdepth 1 \
             -not -name '.git' \
@@ -48,33 +54,33 @@ jobs:
             -not -name 'release.json' \
             -exec rm -rf {} +
 
-      - name: 5. Move Winlator to root
+      - name: 6. Move Winlator to root
         run: |
           shopt -s dotglob
-          mv "$ROOT_DIR"/* .
+          for item in "$ROOT_DIR"/*; do
+            base=$(basename "$item")
+            if [ -e "$base" ]; then
+              rm -rf "$base"
+            fi
+            mv "$item" .
+          done
           rm -rf "$ROOT_DIR" winlator.zip release.json
 
-      - name: 6. Restore Gradle wrapper files
+      - name: 7. Restore Gradle wrapper
         run: |
-          # Восстанавливаем gradlew если его нет
           if [ ! -f gradlew ]; then
-            echo "Восстанавливаю gradlew..."
-            cp /tmp/gradle-backup/gradlew . 2>/dev/null || true
-            cp /tmp/gradle-backup/gradlew.bat . 2>/dev/null || true
-            cp -r /tmp/gradle-backup/gradle . 2>/dev/null || true
-            chmod +x gradlew 2>/dev/null || true
+            cp /tmp/gradle-backup/gradlew .
+            cp /tmp/gradle-backup/gradlew.bat .
+            cp -r /tmp/gradle-backup/gradle .
+            chmod +x gradlew
           fi
-          
-          # Восстанавливаем gradle.properties если нет
           if [ ! -f gradle.properties ]; then
-            cp /tmp/gradle-backup/gradle.properties . 2>/dev/null || true
+            cp /tmp/gradle-backup/gradle.properties .
           fi
-          
           echo "=== Проверка ==="
-          ls -la gradlew gradle.properties 2>/dev/null
-          ls -la gradle/wrapper/ 2>/dev/null
+          ls -la gradlew
 
-      - name: 7. Fetch Modules (app, gladio, vortek)
+      - name: 8. Fetch Modules
         run: |
           rm -rf app gladio vortek
           git clone --depth 1 https://github.com/brunodev85/winlator-app app
@@ -82,10 +88,10 @@ jobs:
           git clone --depth 1 https://github.com/brunodev85/vortek vortek
           rm -rf app/.git gladio/.git vortek/.git
 
-      - name: 8. Commit and Push
+      - name: 9. Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "🚀 Полное ядро Winlator" || echo "Изменений нет"
-          git push origin main
+          git commit -m "🚀 Winlator core + modules" || echo "Нет изменений"
+          git push origin main --force
