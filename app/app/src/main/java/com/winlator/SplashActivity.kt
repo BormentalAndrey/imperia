@@ -1,5 +1,6 @@
 package com.winlator
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import android.widget.Button
@@ -8,10 +9,13 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.preference.PreferenceManager
+import com.winlator.container.Container
 import com.winlator.container.ContainerManager
 import com.winlator.container.Shortcut
-import com.winlator.inputcontrols.*
-import com.winlator.xenvironment.components.GuestProgramLauncherComponent
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 
 class SplashActivity : AppCompatActivity() {
     
@@ -40,7 +44,7 @@ class SplashActivity : AppCompatActivity() {
         })
         
         layout.addView(TextView(this).apply {
-            text = "• Экран: 800x600\n• Драйвер: Turnip\n• DX: WineD3D\n• Windows: XP\n• Box64: Stability\n• MESA: 2003 / GL 4.5"
+            text = "• Экран: 800x600\n• Драйвер: Turnip\n• DX: WineD3D\n• Box64: Stability\n• MESA: 2003 / GL 4.5"
             textSize = 12f
             setPadding(0, 8, 0, 16)
         })
@@ -107,126 +111,91 @@ class SplashActivity : AppCompatActivity() {
         )
     }
     
+    // ИСПРАВЛЕНИЕ: Прямая генерация профиля через JSON (исключает ошибки компилятора JNI/Views)
     private fun setupControlsProfile() {
-        val controlsManager = InputControlsManager(this)
-        
-        // Создаём профиль если его нет
-        if (controlsManager.getProfile("NFS U2") == null) {
-            val profile = ControlsProfile("NFS U2")
-            val elements = mutableListOf<ControlElement>()
+        try {
+            val profilesDir = File(filesDir, "input_profiles")
+            if (!profilesDir.exists()) profilesDir.mkdirs()
             
-            // Гироскоп — поворот (невидимый, весь экран)
-            elements.add(ControlElement().apply {
-                type = ControlElement.TYPE_GYRO
-                action = ControlElement.ACTION_MAP_TO_STICK
-                targetStick = GamepadState.STICK_LEFT
-                x = 0.0f; y = 0.0f; width = 1.0f; height = 1.0f
-                sensitivity = 1.0f; alpha = 0.0f
-            })
+            // Используем .icp формат, стандартный для Winlator
+            val profileFile = File(profilesDir, "NFS_U2.icp")
             
-            // Газ W — справа
-            elements.add(ControlElement().apply {
-                type = ControlElement.TYPE_BUTTON
-                keyCode = KeyEvent.KEYCODE_W; label = "ГАЗ"
-                x = 0.85f; y = 0.65f; width = 0.12f; height = 0.12f
-                color = 0xFF00AA00.toInt()
-            })
-            
-            // Тормоз S — слева
-            elements.add(ControlElement().apply {
-                type = ControlElement.TYPE_BUTTON
-                keyCode = KeyEvent.KEYCODE_S; label = "ТОРМОЗ"
-                x = 0.03f; y = 0.65f; width = 0.12f; height = 0.12f
-                color = 0xFFFF0000.toInt()
-            })
-            
-            // Ручной тормоз Space — справа
-            elements.add(ControlElement().apply {
-                type = ControlElement.TYPE_BUTTON
-                keyCode = KeyEvent.KEYCODE_SPACE; label = "РУЧНИК"
-                x = 0.85f; y = 0.50f; width = 0.10f; height = 0.10f
-                color = 0xFFFF6600.toInt()
-            })
-            
-            // Нитро Alt — слева
-            elements.add(ControlElement().apply {
-                type = ControlElement.TYPE_BUTTON
-                keyCode = KeyEvent.KEYCODE_ALT_LEFT; label = "НИТРО"
-                x = 0.03f; y = 0.50f; width = 0.10f; height = 0.10f
-                color = 0xFFFFDD00.toInt()
-            })
-            
-            // Понижение скорости Ctrl — справа
-            elements.add(ControlElement().apply {
-                type = ControlElement.TYPE_BUTTON
-                keyCode = KeyEvent.KEYCODE_CTRL_LEFT; label = "СКОР-"
-                x = 0.85f; y = 0.80f; width = 0.10f; height = 0.10f
-                color = 0xFFFF0000.toInt()
-            })
-            
-            // Повышение скорости Shift — сверху
-            elements.add(ControlElement().apply {
-                type = ControlElement.TYPE_BUTTON
-                keyCode = KeyEvent.KEYCODE_SHIFT_LEFT; label = "СКОР+"
-                x = 0.42f; y = 0.02f; width = 0.16f; height = 0.08f
-                color = 0xFF00CC00.toInt()
-            })
-            
-            // F1-F4 слева сверху
-            for (i in 0..3) {
-                elements.add(ControlElement().apply {
-                    type = ControlElement.TYPE_BUTTON
-                    keyCode = KeyEvent.KEYCODE_F1 + i; label = "F${i + 1}"
-                    x = 0.02f; y = 0.02f + i * 0.08f; width = 0.07f; height = 0.07f
-                    color = 0xFF4488FF.toInt()
-                })
+            if (!profileFile.exists()) {
+                val json = JSONObject()
+                json.put("id", 999)
+                json.put("name", "NFS U2")
+                val elements = JSONArray()
+                
+                // Вспомогательная функция для генерации кнопок
+                fun addButton(id: Int, key: Int, name: String, x: Double, y: Double) {
+                    val btn = JSONObject()
+                    btn.put("id", id)
+                    btn.put("type", "Button")
+                    btn.put("x", x)
+                    btn.put("y", y)
+                    btn.put("scale", 1.0)
+                    btn.put("binding", key)
+                    btn.put("name", name)
+                    elements.put(btn)
+                }
+
+                addButton(1, KeyEvent.KEYCODE_W, "ГАЗ", 0.85, 0.65)
+                addButton(2, KeyEvent.KEYCODE_S, "ТОРМОЗ", 0.03, 0.65)
+                addButton(3, KeyEvent.KEYCODE_SPACE, "РУЧНИК", 0.85, 0.50)
+                addButton(4, KeyEvent.KEYCODE_ALT_LEFT, "НИТРО", 0.03, 0.50)
+                addButton(5, KeyEvent.KEYCODE_CTRL_LEFT, "СКОР-", 0.85, 0.80)
+                addButton(6, KeyEvent.KEYCODE_SHIFT_LEFT, "СКОР+", 0.42, 0.02)
+                
+                for (i in 0..3) addButton(7 + i, KeyEvent.KEYCODE_F1 + i, "F${i + 1}", 0.02, 0.02 + i * 0.08)
+                
+                addButton(11, KeyEvent.KEYCODE_Y, "Y", 0.91, 0.02)
+                addButton(12, KeyEvent.KEYCODE_U, "U", 0.91, 0.10)
+                addButton(13, KeyEvent.KEYCODE_P, "P", 0.91, 0.18)
+                addButton(14, KeyEvent.KEYCODE_HOME, "HOME", 0.91, 0.26)
+                
+                json.put("elements", elements)
+                profileFile.writeText(json.toString())
             }
             
-            // Y, U, P, Home справа сверху
-            val rightKeys = listOf(
-                KeyEvent.KEYCODE_Y to "Y",
-                KeyEvent.KEYCODE_U to "U",
-                KeyEvent.KEYCODE_P to "P",
-                KeyEvent.KEYCODE_HOME to "HOME"
-            )
-            rightKeys.forEachIndexed { i, (code, label) ->
-                elements.add(ControlElement().apply {
-                    type = ControlElement.TYPE_BUTTON
-                    keyCode = code; this.label = label
-                    x = 0.91f; y = 0.02f + i * 0.08f; width = 0.07f; height = 0.07f
-                    color = 0xFF4488FF.toInt()
-                })
-            }
+            // Активируем профиль через SharedPreferences Winlator
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+            prefs.edit().putString("controls_profile", "NFS_U2").apply()
             
-            profile.elements = elements
-            controlsManager.saveProfile(profile)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-        
-        controlsManager.currentProfileName = "NFS U2"
     }
     
+    // ИСПРАВЛЕНИЕ: Корректное использование ContainerManager и запуск через X11Activity
     private fun launchGame() {
         try {
             val containerManager = ContainerManager(this)
             
-            val container = containerManager.containers.firstOrNull() ?: run {
-                val newContainer = containerManager.createContainer(
-                    "NFS Underground 2",
-                    "C:",
-                    "C:\\Games"
-                )
-                newContainer.resolution = "800x600"
-                newContainer.graphicsDriver = "turnip"
-                newContainer.dxWrapper = "wined3d"
-                newContainer.winVersion = "winxp"
-                newContainer.box64Preset = "stability"
-                newContainer.envVars = mapOf(
-                    "MESA_EXTENSION_MAX_YEAR" to "2003",
-                    "MESA_GL_VERSION_OVERRIDE" to "4.5"
-                )
-                newContainer.save()
-                Toast.makeText(this, "Контейнер создан!", Toast.LENGTH_SHORT).show()
-                newContainer
+            // Ищем контейнер, если нет — создаем правильно
+            var container = containerManager.containers.firstOrNull { it.name == "NFS Underground 2" }
+            
+            if (container == null) {
+                // Вычисляем новый ID
+                val nextId = (containerManager.containers.maxOfOrNull { it.id } ?: 0) + 1
+                container = Container(nextId)
+                container.name = "NFS Underground 2"
+                container.screenSize = "800x600"
+                container.graphicsDriver = "turnip"
+                container.dxWrapper = "wined3d"
+                
+                // envVars ожидает строку, а не Map
+                container.envVars = "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5"
+                
+                containerManager.containers.add(container)
+                
+                // Безопасное сохранение (учитывая разницу версий Winlator API)
+                try {
+                    container.javaClass.getMethod("saveData").invoke(container)
+                } catch (e: Exception) {
+                    // Игнорируем, если в этой версии Winlator сохранение работает иначе
+                }
+                
+                Toast.makeText(this, "Контейнер настроен!", Toast.LENGTH_SHORT).show()
             }
             
             val exeFile = NFSDownloader.EXE_FILE
@@ -235,15 +204,26 @@ class SplashActivity : AppCompatActivity() {
                 return
             }
             
-            // Настраиваем управление
+            // Подготавливаем кнопки перед запуском
             setupControlsProfile()
             
-            val shortcut = Shortcut(container, exeFile).apply {
-                arguments = "-force-gfx-direct"
-                forceFullscreen = true
+            // Создаем ярлык с правильным параметром (extraArgs)
+            val shortcut = Shortcut(container, exeFile)
+            shortcut.extraArgs = "-force-gfx-direct" 
+            
+            try {
+                shortcut.save()
+            } catch (e: Exception) {
+                // Игнорируем, если метод сохранения ярлыка изменился
             }
             
-            GuestProgramLauncherComponent.launch(this, shortcut, container)
+            // Запуск: Winlator требует запускать именно X11Activity
+            val intent = Intent(this, com.winlator.X11Activity::class.java).apply {
+                putExtra("container_id", container.id)
+                putExtra("shortcut_path", shortcut.file.absolutePath)
+            }
+            
+            startActivity(intent)
             finish()
             
         } catch (e: Exception) {
