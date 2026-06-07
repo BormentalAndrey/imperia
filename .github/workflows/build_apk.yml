@@ -20,28 +20,21 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle' # Включаем кэширование для ускорения повторных сборок
-      
-      - name: Setup Android SDK & NDK
+          cache: 'gradle'
+
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          lineage: 'stable'
-          # Ubuntu-runners уже имеют NDK, но этот шаг гарантирует его правильную инициализацию
 
       - name: Create Correct Multi-Module Build Files
         run: |
-          # Создаем правильный settings.gradle, связывающий все 3 модуля вместе
           cat > settings.gradle << 'EOF'
           rootProject.name = "imperia"
-          
           include ':app', ':gladio', ':vortek'
-          
           project(':app').projectDir = new File('app/app')
           project(':gladio').projectDir = new File('gladio')
           project(':vortek').projectDir = new File('vortek')
           EOF
           
-          # Создаем корневой build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -59,9 +52,35 @@ jobs:
               }
           }
           EOF
+
+      - name: Patch Missing Namespaces for AGP 8.x
+        run: |
+          echo "=== Автоматическое исправление namespace для совместимости с AGP 8.x ==="
           
-          echo "=== Проверка конфигурации проекта ==="
-          cat settings.gradle
+          patch_namespace() {
+              local module_dir=$1
+              local manifest="$module_dir/src/main/AndroidManifest.xml"
+              local build_gradle="$module_dir/build.gradle"
+              
+              if [ -f "$manifest" ] && [ -f "$build_gradle" ]; then
+                  # Вытаскиваем имя оригинального пакета из манифеста
+                  local pkg=$(grep -o 'package="[^"]*"' "$manifest" | head -n 1 | cut -d'"' -f2)
+                  
+                  if [ ! -z "$pkg" ]; then
+                      echo "Модуль [$module_dir]: найден пакет [$pkg]. Инжектируем namespace..."
+                      # Вставляем строку namespace внутрь блока android {
+                      sed -i -E "s/android[[:space:]]*\{/android {\n    namespace \"$pkg\"/" "$build_gradle"
+                  else
+                      echo "Модуль [$module_dir]: атрибут package не найден в манифесте."
+                  fi
+              else
+                  echo "Модуль [$module_dir]: файлы конфигурации не найдены (возможно, это не Android-модуль)."
+              fi
+          }
+
+          patch_namespace "app/app"
+          patch_namespace "gladio"
+          patch_namespace "vortek"
 
       - name: Grant Execute Permission for Gradle
         run: chmod +x gradlew
