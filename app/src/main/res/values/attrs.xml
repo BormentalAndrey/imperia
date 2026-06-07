@@ -4,6 +4,7 @@
     <attr name="minValue" format="integer|float" />
     <attr name="maxValue" format="integer|float" />
     <attr name="step" format="integer|float" />
+    <attr name="suffix" format="string" />
     <attr name="textSize" format="dimension" />
     <attr name="colorPrimaryText" format="color" />
     <attr name="colorSecondaryText" format="color" />
@@ -11,6 +12,12 @@
     <attr name="toolboxBackground" format="reference" />
     <attr name="preloaderBackground" format="reference" />
     <attr name="progressBarIndeterminateImage" format="reference" />
+    
+    <!-- Недостающие атрибуты -->
+    <attr name="colorAccent" format="color" />
+    <attr name="colorError" format="color" />
+    <attr name="colorPrimarySurface" format="color" />
+
     <declare-styleable name="NumberPicker">
         <attr name="value" />
         <attr name="minValue" />
@@ -18,12 +25,13 @@
         <attr name="step" />
         <attr name="textSize" />
     </declare-styleable>
+    
     <declare-styleable name="SeekBar">
         <attr name="value" />
         <attr name="minValue" />
         <attr name="maxValue" />
         <attr name="step" />
-        <attr name="suffix" format="string" />
+        <attr name="suffix" />
         <attr name="textSize" />
     </declare-styleable>
 </resources>
