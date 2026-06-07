@@ -13,7 +13,7 @@ task copyEmulatorComponents(type: Copy) {
 preBuild.dependsOn(copyEmulatorComponents)
 
 android {
-    namespace 'com.imperia.emulator'
+    namespace 'com.winlator'
     compileSdk 34
 
     defaultConfig {
@@ -61,11 +61,8 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
-    
-    // Не хватало этих двух:
     implementation 'androidx.preference:preference:1.2.1'
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-
     implementation 'com.github.luben:zstd-jni:1.5.5-11@aar'
     implementation 'org.apache.commons:commons-compress:1.26.0'
 }
