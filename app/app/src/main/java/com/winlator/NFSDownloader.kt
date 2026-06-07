@@ -22,7 +22,7 @@ class NFSDownloader(private val context: Context) {
         private const val TAG = "NFSDownloader"
         private const val GAME_ID = "nfsu2"
         private const val GAME_NAME = "Need for Speed: Underground 2"
-        private const val EXE_NAME = "speed2.exe"
+        private const val EXE_NAME = "SPEED2.EXE"
         private const val GAME_SIZE = "2.1 GB"
         
         // ЗАМЕНИТЬ НА РЕАЛЬНУЮ ССЫЛКУ
