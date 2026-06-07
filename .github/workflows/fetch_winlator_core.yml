@@ -1,61 +1,27 @@
-name: Sync Winlator Source Code
+name: Explore Winlator Source
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  sync:
+  explore:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout imperia
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Clone Winlator source
+      - name: Clone Winlator
         run: |
-          git clone --depth 1 https://github.com/brunodev85/Winlator.git /tmp/winlator-src
+          git clone --depth 1 https://github.com/brunodev85/Winlator.git /tmp/win
           
-          echo "=== Java файлы ==="
-          find /tmp/winlator-src/app/src -name "*.kt" -o -name "*.java" | head -20
+          echo "=== Корень ==="
+          ls -la /tmp/win/
           
           echo ""
-          echo "=== .so файлы ==="
-          find /tmp/winlator-src -name "*.so" | head -10
-
-      - name: Copy Java source
-        run: |
-          # Копируем весь com.winlator
-          mkdir -p app/src/main/java/com/winlator
-          cp -r /tmp/winlator-src/app/src/main/java/com/winlator/* app/src/main/java/com/winlator/
+          echo "=== app/ ==="
+          ls -la /tmp/win/app/ 2>/dev/null || echo "Нет app/"
           
-          echo "Скопировано файлов:"
-          find app/src/main/java/com/winlator -type f | wc -l
-
-      - name: Copy native libs
-        run: |
-          # Ищем jniLibs
-          find /tmp/winlator-src -type d -name "jniLibs" | while read dir; do
-            echo "Копирую из $dir"
-            cp -r "$dir"/* app/src/main/jniLibs/ 2>/dev/null || true
-          done
+          echo ""
+          echo "=== Все папки с кодом ==="
+          find /tmp/win -type d -name "java" -o -name "kotlin" -o -name "src" | head -20
           
-          echo "Библиотеки:"
-          find app/src/main/jniLibs -name "*.so" 2>/dev/null | head -10
-
-      - name: Commit and push
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          git add app/src/main/java/com/winlator/ app/src/main/jniLibs/
-          
-          if git diff --staged --quiet; then
-            echo "Нет изменений"
-          else
-            git commit -m "🤖 Синхронизация исходников Winlator"
-            git push origin main
-          fi
+          echo ""
+          echo "=== Все .kt/.java файлы ==="
+          find /tmp/win -name "*.kt" -o -name "*.java" | head -20
