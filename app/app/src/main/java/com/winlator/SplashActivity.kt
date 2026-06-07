@@ -220,9 +220,13 @@ class SplashActivity : AppCompatActivity() {
             
             setupControlsProfile()
             
+            // Используем Z: — корень файловой системы, доступен всегда
+            // /sdcard/RetroEmulator/games/nfsu2/speed2.exe → Z:\sdcard\RetroEmulator\games\nfsu2\speed2.exe
+            val dosPath = "Z:" + exeFile.absolutePath.replace("/", "\\")
+            
             val intent = Intent(this, XServerDisplayActivity::class.java)
             intent.putExtra("container_id", container.id)
-            intent.putExtra("exec_path", exeFile.absolutePath)
+            intent.putExtra("exec_path", dosPath)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             
             startActivity(intent)
