@@ -1,19 +1,15 @@
 package com.winlator
 
-import android.content.Intent
 import android.os.Bundle
-import android.os.Environment
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.winlator.container.Container
 import com.winlator.container.ContainerManager
 import com.winlator.container.Shortcut
 import com.winlator.xenvironment.components.GuestProgramLauncherComponent
-import java.io.File
 
 class SplashActivity : AppCompatActivity() {
     
@@ -39,6 +35,12 @@ class SplashActivity : AppCompatActivity() {
         layout.addView(TextView(this).apply {
             text = "Need for Speed\nUnderground 2"
             textSize = 28f
+        })
+        
+        layout.addView(TextView(this).apply {
+            text = "• Экран: 800x600\n• Драйвер: Turnip\n• DX: WineD3D\n• Windows: XP\n• Box64: Stability\n• MESA: 2003 / GL 4.5"
+            textSize = 12f
+            setPadding(0, 8, 0, 16)
         })
         
         statusText = TextView(this).apply {
@@ -106,22 +108,51 @@ class SplashActivity : AppCompatActivity() {
     private fun launchGame() {
         try {
             val containerManager = ContainerManager(this)
+            
+            // Берём первый контейнер или создаём новый
             val container = containerManager.containers.firstOrNull() ?: run {
-                Toast.makeText(this, "Создайте контейнер в Winlator", Toast.LENGTH_LONG).show()
-                return
+                // Создаём контейнер с настройками для NFS
+                val newContainer = containerManager.createContainer(
+                    "NFS Underground 2",
+                    "C:",           // диск C
+                    "C:\\Games"     // папка для игр
+                )
+                
+                // Применяем настройки
+                newContainer.resolution = "800x600"
+                newContainer.graphicsDriver = "turnip"
+                newContainer.dxWrapper = "wined3d"
+                newContainer.winVersion = "winxp"
+                newContainer.box64Preset = "stability"
+                newContainer.envVars = mapOf(
+                    "MESA_EXTENSION_MAX_YEAR" to "2003",
+                    "MESA_GL_VERSION_OVERRIDE" to "4.5"
+                )
+                newContainer.save()
+                
+                Toast.makeText(this, "Контейнер создан!", Toast.LENGTH_SHORT).show()
+                newContainer
             }
             
             val exeFile = NFSDownloader.EXE_FILE
             if (!exeFile.exists()) {
-                Toast.makeText(this, "Файл не найден: ${exeFile.absolutePath}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Файл не найден:\n${exeFile.absolutePath}", Toast.LENGTH_LONG).show()
                 return
             }
             
-            val shortcut = Shortcut(container, exeFile)
+            // Создаём ярлык с аргументами
+            val shortcut = Shortcut(container, exeFile).apply {
+                arguments = "-force-gfx-direct"
+                forceFullscreen = true
+            }
+            
+            // Запускаем игру
             GuestProgramLauncherComponent.launch(this, shortcut, container)
             finish()
+            
         } catch (e: Exception) {
             Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
+            e.printStackTrace()
         }
     }
 }
