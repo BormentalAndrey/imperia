@@ -12,60 +12,69 @@ jobs:
     steps:
       - name: Checkout current repo
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download Winlator release source
+      - name: 1. Fetch Winlator Source ZIP
         run: |
-          # Скачиваем архив исходников Winlator 7.1.3
-          wget -O winlator.zip "https://github.com/brunodev85/Winlator/archive/refs/tags/v7.1.3.zip"
+          echo "=== Получаем последний релиз ==="
+          curl -s https://api.github.com/repos/brunodev85/Winlator/releases/latest > release.json
+          TAG=$(grep '"tag_name"' release.json | head -1 | cut -d'"' -f4)
+          echo "Тег: $TAG"
           
-          # Распаковываем
+          # Скачиваем ZIP исходников по тегу
+          wget -O winlator.zip "https://github.com/brunodev85/Winlator/archive/refs/tags/${TAG}.zip"
+
+      - name: 2. Extract archive
+        run: |
           unzip -q winlator.zip
-          
-          # Показываем что внутри
-          ls -la
-          ls -la Winlator-7.1.3/
+          ROOT_DIR=$(find . -maxdepth 1 -type d -iname "winlator-*" | head -1)
+          # Очищаем имя от спецсимволов пути
+          ROOT_DIR=$(basename "$ROOT_DIR")
+          echo "ROOT_DIR=$ROOT_DIR" >> $GITHUB_ENV
 
-      - name: Clone submodules
+      - name: 3. Clear old Imperia code (Safely)
         run: |
-          cd Winlator-7.1.3
+          # Удаляем старое, сохраняя .git (историю), .github (ваши скрипты) и скачанный архив
+          find . -mindepth 1 -maxdepth 1 \
+            -not -name '.git' \
+            -not -name '.github' \
+            -not -name "$ROOT_DIR" \
+            -not -name 'winlator.zip' \
+            -not -name 'release.json' \
+            -exec rm -rf {} +
+
+      - name: 4. Move Winlator to root
+        run: |
+          shopt -s dotglob
+          mv "$ROOT_DIR"/* .
+          rm -rf "$ROOT_DIR" winlator.zip release.json
+
+      - name: 5. Fetch Modules (app, gladio, vortek)
+        run: |
+          # В архиве это просто пустые папки-заглушки. Удаляем их.
+          rm -rf app gladio vortek
           
-          # Инициализируем подмодули
-          git init
-          git submodule add https://github.com/brunodev85/winlator-app app
-          git submodule add https://github.com/brunodev85/gladio gladio
-          git submodule add https://github.com/brunodev85/vortek vortek
-          git submodule update --init --recursive
+          # Клонируем реальный код (без возни с submodules)
+          git clone --depth 1 https://github.com/brunodev85/winlator-app app
+          git clone --depth 1 https://github.com/brunodev85/gladio gladio
+          git clone --depth 1 https://github.com/brunodev85/vortek vortek
           
-          # Удаляем .git из подмодулей (чтобы они стали обычными папками)
+          # Удаляем .git внутри них. Теперь это часть вашего кода!
           rm -rf app/.git gladio/.git vortek/.git
 
-      - name: Clear repository
+      - name: 6. Setup Gradle
         run: |
-          # Удаляем ВСЁ из репозитория
-          find . -mindepth 1 -not -path './.git/*' -not -name '.git' -not -path './Winlator-7.1.3/*' -delete
-          
-          # Перемещаем всё из Winlator-7.1.3 в корень
-          shopt -s dotglob
-          mv Winlator-7.1.3/* .
-          rm -rf Winlator-7.1.3 winlator.zip
+          # Поднимаем gradlew в корень проекта, чтобы Android Studio не ругалась
+          if [ ! -f gradlew ] && [ -f app/gradlew ]; then
+            cp -r app/gradle .
+            cp app/gradlew .
+            chmod +x gradlew
+          fi
 
-      - name: Setup Gradle wrapper
-        run: |
-          cd app
-          gradle wrapper --gradle-version 8.4
-          cd ..
-          cp -r app/gradle .
-          cp app/gradlew .
-          cp app/gradlew.bat .
-          chmod +x gradlew
-
-      - name: Commit and push
+      - name: 7. Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
           git add -A
-          git commit -m "🚀 Полный сброс: Winlator 7.1.3 с подмодулями"
-          git push origin main --force
+          git commit -m "🚀 Троянский конь: Установлено полное ядро Winlator" || echo "Изменений нет"
+          git push origin main
