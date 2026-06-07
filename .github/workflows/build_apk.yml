@@ -27,6 +27,7 @@ jobs:
 
       - name: Create Correct Multi-Module Build Files
         run: |
+          # 1. Настройка модулей
           cat > settings.gradle << 'EOF'
           rootProject.name = "imperia"
           include ':app', ':gladio', ':vortek'
@@ -35,6 +36,7 @@ jobs:
           project(':vortek').projectDir = new File('vortek')
           EOF
           
+          # 2. Настройка корневого build.gradle
           cat > build.gradle << 'EOF'
           buildscript {
               repositories {
@@ -53,6 +55,12 @@ jobs:
           }
           EOF
 
+          # 3. Лечение ошибки "constant expression required" + выделение памяти под компиляцию C++
+          cat > gradle.properties << 'EOF'
+          android.nonFinalResIds=false
+          org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m
+          EOF
+
       - name: Patch Missing Namespaces for AGP 8.x
         run: |
           echo "=== Автоматическое исправление namespace для совместимости с AGP 8.x ==="
@@ -63,18 +71,11 @@ jobs:
               local build_gradle="$module_dir/build.gradle"
               
               if [ -f "$manifest" ] && [ -f "$build_gradle" ]; then
-                  # Вытаскиваем имя оригинального пакета из манифеста
                   local pkg=$(grep -o 'package="[^"]*"' "$manifest" | head -n 1 | cut -d'"' -f2)
-                  
                   if [ ! -z "$pkg" ]; then
                       echo "Модуль [$module_dir]: найден пакет [$pkg]. Инжектируем namespace..."
-                      # Вставляем строку namespace внутрь блока android {
                       sed -i -E "s/android[[:space:]]*\{/android {\n    namespace \"$pkg\"/" "$build_gradle"
-                  else
-                      echo "Модуль [$module_dir]: атрибут package не найден в манифесте."
                   fi
-              else
-                  echo "Модуль [$module_dir]: файлы конфигурации не найдены (возможно, это не Android-модуль)."
               fi
           }
 
