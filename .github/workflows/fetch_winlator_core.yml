@@ -1,27 +1,23 @@
-name: Explore Winlator Source
+name: Find Winlator Source Code
 
 on:
   workflow_dispatch:
 
 jobs:
-  explore:
+  find:
     runs-on: ubuntu-latest
     steps:
-      - name: Clone Winlator
+      - name: Try winlator-android
         run: |
-          git clone --depth 1 https://github.com/brunodev85/Winlator.git /tmp/win
+          git clone --depth 1 https://github.com/brunodev85/winlator-android.git /tmp/w
           
-          echo "=== Корень ==="
-          ls -la /tmp/win/
-          
-          echo ""
-          echo "=== app/ ==="
-          ls -la /tmp/win/app/ 2>/dev/null || echo "Нет app/"
+          echo "=== Структура ==="
+          ls -la /tmp/w/
           
           echo ""
-          echo "=== Все папки с кодом ==="
-          find /tmp/win -type d -name "java" -o -name "kotlin" -o -name "src" | head -20
+          echo "=== Ищем код ==="
+          find /tmp/w -name "*.kt" -o -name "*.java" | head -10
           
           echo ""
-          echo "=== Все .kt/.java файлы ==="
-          find /tmp/win -name "*.kt" -o -name "*.java" | head -20
+          echo "=== Ищем .so ==="
+          find /tmp/w -name "*.so" | head -5
