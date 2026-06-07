@@ -1,3 +1,6 @@
+## Файл: `app/app/src/main/java/com/winlator/SplashActivity.kt`
+
+```kotlin
 package com.winlator
 
 import android.content.Intent
@@ -11,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.winlator.container.Container
 import com.winlator.container.ContainerManager
 import com.winlator.core.Callback
+import com.winlator.xenvironment.RootFS
 import org.json.JSONObject
 import java.io.File
 
@@ -102,7 +106,24 @@ class SplashActivity : AppCompatActivity() {
         )
     }
     
+    private fun isRootFSInstalled(): Boolean {
+        return try {
+            RootFS.find(this) != null
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
     private fun launchGame() {
+        if (!isRootFSInstalled()) {
+            Toast.makeText(this, "Первичная настройка...", Toast.LENGTH_LONG).show()
+            val intent = Intent(this, MainActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            startActivity(intent)
+            finish()
+            return
+        }
+        
         try {
             val containerManager = ContainerManager(this)
             
@@ -135,9 +156,7 @@ class SplashActivity : AppCompatActivity() {
             }
             
         } catch (e: Exception) {
-            val intent = Intent(this, MainActivity::class.java)
-            startActivity(intent)
-            finish()
+            Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
     
@@ -172,3 +191,4 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 }
+```
