@@ -1,4 +1,4 @@
-name: Copy Winlator Resources
+name: Fix Duplicate Resources
 
 on:
   workflow_dispatch:
@@ -7,47 +7,44 @@ permissions:
   contents: write
 
 jobs:
-  copy-resources:
+  fix:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout imperia
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Clone Winlator with submodules
+      - name: Remove duplicate resources
         run: |
-          git clone --recursive --depth 1 https://github.com/brunodev85/Winlator.git /tmp/win
-
-      - name: Copy all resources
-        run: |
-          echo "=== Копируем res ==="
-          cp -r /tmp/win/app/app/src/main/res/* app/src/main/res/
+          # Удаляем наши старые иконки (оставляем от Winlator)
+          rm -f app/src/main/res/mipmap-hdpi/ic_launcher.png 2>/dev/null
+          rm -f app/src/main/res/mipmap-hdpi/ic_launcher.xml 2>/dev/null
+          rm -f app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml 2>/dev/null
+          rm -f app/src/main/res/drawable/ic_launcher_foreground.xml 2>/dev/null
+          rm -f app/src/main/res/values/ic_launcher_background.xml 2>/dev/null
           
-          echo "=== Копируем assets ==="
-          cp -r /tmp/win/app/app/src/main/assets/* app/src/main/assets/ 2>/dev/null || echo "Нет assets"
+          # Удаляем дубликат цвета если есть
+          rm -f app/src/main/res/values/colors.xml 2>/dev/null
           
-          echo "=== Копируем AndroidManifest (для справки) ==="
-          cp /tmp/win/app/app/src/main/AndroidManifest.xml app/src/main/AndroidManifest_winlator.xml 2>/dev/null || echo "Нет манифеста"
+          # Удаляем наши старые строки (оставляем от Winlator)
+          rm -f app/src/main/res/values/strings.xml 2>/dev/null
           
-          echo ""
-          echo "=== Скопированные файлы ==="
-          find app/src/main/res -type f | wc -l
-          echo "ресурсов"
-          find app/src/main/assets -type f 2>/dev/null | wc -l
-          echo "ассетов"
+          # Удаляем наши старые темы
+          rm -f app/src/main/res/values/themes.xml 2>/dev/null
+          
+          echo "=== Оставшиеся ресурсы ==="
+          find app/src/main/res -type f | sort
 
       - name: Commit and push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          git add app/src/main/res/
-          git add app/src/main/assets/
+          git add -A
           
           if git diff --staged --quiet; then
             echo "Нет изменений"
           else
-            git commit -m "🤖 Ресурсы и ассеты Winlator"
+            git commit -m "🤖 Удалены дубликаты ресурсов"
             git push origin main
           fi
