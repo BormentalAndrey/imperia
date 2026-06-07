@@ -427,7 +427,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (intent.hasExtra("exec_path")) {
             AppUtils.RestartApplicationOptions options = new AppUtils.RestartApplicationOptions();
             options.containerId = container.id;
-            options.startPath = FileUtils.getDirname(intent.getStringExtra("exec_path"));
+            String execPath = intent.getStringExtra("exec_path");
+            if (execPath != null && execPath.matches("[A-Za-z]:.*")) {
+                options.startPath = execPath.substring(0, Math.max(execPath.lastIndexOf('\\'), 0));
+            } else {
+                options.startPath = FileUtils.getDirname(execPath);
+            }
             AppUtils.restartApplication(this, options);
         }
         else AppUtils.restartApplication(this);
@@ -946,7 +951,13 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         else {
             Intent intent = getIntent();
             if (intent.hasExtra("exec_path")) {
-                execPath = WineUtils.unixToDOSPath(intent.getStringExtra("exec_path"), container);
+                String rawPath = intent.getStringExtra("exec_path");
+                if (rawPath != null && rawPath.matches("[A-Za-z]:.*")) {
+                // Путь уже в DOS-формате (Z:\...), не конвертируем
+                    execPath = rawPath;
+                } else {
+                    execPath = WineUtils.unixToDOSPath(rawPath, container);
+                }
 
                 if (execPath.endsWith(".lnk")) {
                     cmdArgs = "\""+execPath+"\"";
