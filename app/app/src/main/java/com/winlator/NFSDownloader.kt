@@ -22,10 +22,9 @@ class NFSDownloader(private val context: Context) {
         private const val TAG = "NFSDownloader"
         private const val GAME_ID = "nfsu2"
         private const val GAME_NAME = "Need for Speed: Underground 2"
-        private const val EXE_NAME = "SPEED2.EXE"
+        const val EXE_NAME = "SPEED2.EXE"
         private const val GAME_SIZE = "2.1 GB"
         
-        // ЗАМЕНИТЬ НА РЕАЛЬНУЮ ССЫЛКУ
         private const val DOWNLOAD_URL = "https://drive.google.com/uc?export=download&id=YOUR_FILE_ID"
         
         val GAMES_DIR = File(Environment.getExternalStorageDirectory(), "RetroEmulator/games")
