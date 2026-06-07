@@ -144,7 +144,9 @@ class SplashActivity : AppCompatActivity() {
                 addButton(5, KeyEvent.KEYCODE_CTRL_LEFT, "СКОР-", 0.85, 0.80)
                 addButton(6, KeyEvent.KEYCODE_SHIFT_LEFT, "СКОР+", 0.42, 0.02)
                 
-                for (i in 0..3) addButton(7 + i, KeyEvent.KEYCODE_F1 + i, "F${i + 1}", 0.02, 0.02 + i * 0.08)
+                for (i in 0..3) {
+                    addButton(7 + i, KeyEvent.KEYCODE_F1 + i, "F${i + 1}", 0.02, 0.02 + i * 0.08)
+                }
                 
                 addButton(11, KeyEvent.KEYCODE_Y, "Y", 0.91, 0.02)
                 addButton(12, KeyEvent.KEYCODE_U, "U", 0.91, 0.10)
@@ -166,7 +168,6 @@ class SplashActivity : AppCompatActivity() {
     private fun launchGame() {
         val containerManager = ContainerManager(this)
         
-        // Ищем существующий контейнер
         val existingContainer = containerManager.containers.firstOrNull { 
             it.name == "NFS Underground 2" 
         }
@@ -176,14 +177,12 @@ class SplashActivity : AppCompatActivity() {
             return
         }
         
-        // Создаём новый через Winlator API
-        val data = JSONObject().apply {
-            put("name", "NFS Underground 2")
-            put("screenSize", "800x600")
-            put("graphicsDriver", "turnip")
-            put("dxwrapper", "wined3d")
-            put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
-        }
+        val data = JSONObject()
+        data.put("name", "NFS Underground 2")
+        data.put("screenSize", "800x600")
+        data.put("graphicsDriver", "turnip")
+        data.put("dxwrapper", "wined3d")
+        data.put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
         
         actionButton.isEnabled = false
         statusText.text = "Создание контейнера..."
@@ -215,10 +214,9 @@ class SplashActivity : AppCompatActivity() {
         
         val shortcut = Shortcut(container, exeFile)
         
-        val intent = Intent(this, XServerDisplayActivity::class.java).apply {
-            putExtra("container_id", container.id)
-            putExtra("shortcut_path", shortcut.file.absolutePath)
-        }
+        val intent = Intent(this, XServerDisplayActivity::class.java)
+        intent.putExtra("container_id", container.id)
+        intent.putExtra("shortcut_path", shortcut.file.absolutePath)
         
         startActivity(intent)
         finish()
