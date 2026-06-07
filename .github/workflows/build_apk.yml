@@ -28,7 +28,17 @@ jobs:
           ROOT_DIR=$(basename "$ROOT_DIR")
           echo "ROOT_DIR=$ROOT_DIR" >> $GITHUB_ENV
 
-      - name: 3. Clear old Imperia code
+      - name: 3. Backup Gradle wrapper files
+        run: |
+          mkdir -p /tmp/gradle-backup
+          cp -r gradle /tmp/gradle-backup/ 2>/dev/null || true
+          cp gradlew /tmp/gradle-backup/ 2>/dev/null || true
+          cp gradlew.bat /tmp/gradle-backup/ 2>/dev/null || true
+          cp gradle.properties /tmp/gradle-backup/ 2>/dev/null || true
+          echo "Сохранено:"
+          ls -la /tmp/gradle-backup/
+
+      - name: 4. Clear old Imperia code
         run: |
           find . -mindepth 1 -maxdepth 1 \
             -not -name '.git' \
@@ -38,13 +48,33 @@ jobs:
             -not -name 'release.json' \
             -exec rm -rf {} +
 
-      - name: 4. Move Winlator to root
+      - name: 5. Move Winlator to root
         run: |
           shopt -s dotglob
           mv "$ROOT_DIR"/* .
           rm -rf "$ROOT_DIR" winlator.zip release.json
 
-      - name: 5. Fetch Modules (app, gladio, vortek)
+      - name: 6. Restore Gradle wrapper files
+        run: |
+          # Восстанавливаем gradlew если его нет
+          if [ ! -f gradlew ]; then
+            echo "Восстанавливаю gradlew..."
+            cp /tmp/gradle-backup/gradlew . 2>/dev/null || true
+            cp /tmp/gradle-backup/gradlew.bat . 2>/dev/null || true
+            cp -r /tmp/gradle-backup/gradle . 2>/dev/null || true
+            chmod +x gradlew 2>/dev/null || true
+          fi
+          
+          # Восстанавливаем gradle.properties если нет
+          if [ ! -f gradle.properties ]; then
+            cp /tmp/gradle-backup/gradle.properties . 2>/dev/null || true
+          fi
+          
+          echo "=== Проверка ==="
+          ls -la gradlew gradle.properties 2>/dev/null
+          ls -la gradle/wrapper/ 2>/dev/null
+
+      - name: 7. Fetch Modules (app, gladio, vortek)
         run: |
           rm -rf app gladio vortek
           git clone --depth 1 https://github.com/brunodev85/winlator-app app
@@ -52,27 +82,10 @@ jobs:
           git clone --depth 1 https://github.com/brunodev85/vortek vortek
           rm -rf app/.git gladio/.git vortek/.git
 
-      - name: 6. Setup Gradle wrapper
-        run: |
-          # Скачиваем Gradle если не установлен
-          if ! command -v gradle &> /dev/null; then
-            sudo apt-get update -qq && sudo apt-get install -y -qq wget unzip
-            wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip
-            sudo unzip -q gradle-8.4-bin.zip -d /opt
-            sudo ln -s /opt/gradle-8.4/bin/gradle /usr/local/bin/gradle
-          fi
-          
-          # Генерируем wrapper
-          gradle wrapper --gradle-version 8.4
-          chmod +x gradlew
-          
-          echo "=== Проверка ==="
-          ./gradlew --version
-
-      - name: 7. Commit and Push
+      - name: 8. Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "🚀 Полное ядро Winlator + Gradle wrapper" || echo "Изменений нет"
+          git commit -m "🚀 Полное ядро Winlator" || echo "Изменений нет"
           git push origin main
