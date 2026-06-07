@@ -1,29 +1,34 @@
 package com.imperia.emulator
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.os.Environment
 import android.util.Log
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import com.github.luben.zstd.ZstdInputStream
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
 
-class DirectLauncher : AppCompatActivity() {
+class DirectLauncher : Activity() {
     
     companion object {
         private const val TAG = "DirectLauncher"
         private const val GAMES_DIR = "RetroEmulator/games"
     }
+    
+    // Продакшен-решение: собственный Scope для корутин, защищающий от утечек памяти
+    private val activityScope = CoroutineScope(Dispatchers.Main + Job())
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,8 +48,8 @@ class DirectLauncher : AppCompatActivity() {
         
         Log.d(TAG, "Launching: $gameId, exe: $exeName")
         
-        // Запускаем асинхронную проверку и распаковку
-        lifecycleScope.launch {
+        // Запускаем асинхронную проверку и распаковку в безопасном скоупе
+        activityScope.launch {
             try {
                 statusText.text = "Проверка библиотек Box64 и Turnip..."
                 prepareEmulatorEnvironment()
@@ -57,6 +62,12 @@ class DirectLauncher : AppCompatActivity() {
                 finish()
             }
         }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Очищаем корутины при уничтожении Activity
+        activityScope.cancel()
     }
     
     // Распаковка .tzst файлов (Box64, Turnip, DXVK) из папки assets/components/ 
