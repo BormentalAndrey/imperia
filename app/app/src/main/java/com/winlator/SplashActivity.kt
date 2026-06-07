@@ -115,7 +115,9 @@ class SplashActivity : AppCompatActivity() {
     private fun setupControlsProfile() {
         try {
             val profilesDir = File(filesDir, "input_profiles")
-            if (!profilesDir.exists()) profilesDir.mkdirs()
+            if (!profilesDir.exists()) {
+                profilesDir.mkdirs()
+            }
             
             val profileFile = File(profilesDir, "NFS_U2.icp")
             
@@ -166,59 +168,77 @@ class SplashActivity : AppCompatActivity() {
     }
     
     private fun launchGame() {
-        val containerManager = ContainerManager(this)
-        
-        val existingContainer = containerManager.containers.firstOrNull { 
-            it.name == "NFS Underground 2" 
-        }
-        
-        if (existingContainer != null) {
-            launchWithContainer(existingContainer)
-            return
-        }
-        
-        val data = JSONObject()
-        data.put("name", "NFS Underground 2")
-        data.put("screenSize", "800x600")
-        data.put("graphicsDriver", "turnip")
-        data.put("dxwrapper", "wined3d")
-        data.put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
-        
-        actionButton.isEnabled = false
-        statusText.text = "Создание контейнера..."
-        
-        containerManager.createContainerAsync(data, object : Callback<Container> {
-            override fun call(container: Container) {
-                runOnUiThread {
-                    actionButton.isEnabled = true
-                    if (container != null) {
-                        Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
-                        launchWithContainer(container)
-                    } else {
-                        statusText.text = "Ошибка создания контейнера"
-                        Toast.makeText(this@SplashActivity, "Не удалось создать контейнер", Toast.LENGTH_LONG).show()
+        try {
+            val containerManager = ContainerManager(this)
+            
+            val existingContainer = containerManager.containers.firstOrNull { 
+                it.name == "NFS Underground 2" 
+            }
+            
+            if (existingContainer != null) {
+                launchWithContainer(existingContainer)
+                return
+            }
+            
+            val data = JSONObject()
+            data.put("name", "NFS Underground 2")
+            data.put("screenSize", "800x600")
+            data.put("graphicsDriver", "turnip")
+            data.put("dxwrapper", "wined3d")
+            data.put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
+            
+            actionButton.isEnabled = false
+            statusText.text = "Создание контейнера..."
+            
+            containerManager.createContainerAsync(data, object : Callback<Container> {
+                override fun call(container: Container) {
+                    runOnUiThread {
+                        actionButton.isEnabled = true
+                        if (container != null) {
+                            Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
+                            launchWithContainer(container)
+                        } else {
+                            statusText.text = "Ошибка создания контейнера"
+                            Toast.makeText(this@SplashActivity, "Не удалось создать контейнер", Toast.LENGTH_LONG).show()
+                        }
                     }
                 }
-            }
-        })
+            })
+            
+        } catch (e: Exception) {
+            Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
+            e.printStackTrace()
+        }
     }
     
     private fun launchWithContainer(container: Container) {
-        val exeFile = NFSDownloader.EXE_FILE
-        if (!exeFile.exists()) {
-            Toast.makeText(this, "Файл не найден:\n${exeFile.absolutePath}", Toast.LENGTH_LONG).show()
-            return
+        try {
+            val exeFile = NFSDownloader.EXE_FILE
+            if (!exeFile.exists()) {
+                Toast.makeText(this, "Файл не найден:\n${exeFile.absolutePath}", Toast.LENGTH_LONG).show()
+                return
+            }
+            
+            setupControlsProfile()
+            
+            val shortcut = Shortcut(container, exeFile)
+            
+            if (shortcut.file == null || !shortcut.file.exists()) {
+                Toast.makeText(this, "Ошибка создания ярлыка", Toast.LENGTH_LONG).show()
+                return
+            }
+            
+            val intent = Intent(this, XServerDisplayActivity::class.java)
+            intent.putExtra("container_id", container.id)
+            intent.putExtra("shortcut_path", shortcut.file.absolutePath)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            
+            startActivity(intent)
+            finish()
+            
+        } catch (e: Exception) {
+            Toast.makeText(this, "Ошибка запуска: ${e.message}", Toast.LENGTH_LONG).show()
+            e.printStackTrace()
         }
-        
-        setupControlsProfile()
-        
-        val shortcut = Shortcut(container, exeFile)
-        
-        val intent = Intent(this, XServerDisplayActivity::class.java)
-        intent.putExtra("container_id", container.id)
-        intent.putExtra("shortcut_path", shortcut.file.absolutePath)
-        
-        startActivity(intent)
-        finish()
     }
 }
