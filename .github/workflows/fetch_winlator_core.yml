@@ -1,78 +1,27 @@
-name: Sync Winlator Core
+name: Explore Winlator Structure
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  sync-files:
+  explore:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout local repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Clone source Winlator
-        run: git clone --depth 1 https://github.com/brunodev85/winlator.git /tmp/winlator
-
-      - name: Copy Winlator Java files
+      - name: Clone Winlator
         run: |
-          # Создаём все нужные папки
-          mkdir -p app/src/main/java/com/winlator/core
-          mkdir -p app/src/main/java/com/winlator/xserver
-          mkdir -p app/src/main/java/com/winlator/wine
-          mkdir -p app/src/main/java/com/winlator/box86
-          mkdir -p app/src/main/java/com/winlator/box64
-          mkdir -p app/src/main/java/com/winlator/widget
-          mkdir -p app/src/main/java/com/winlator/utils
-          mkdir -p app/src/main/java/com/winlator/controls
-          mkdir -p app/src/main/java/com/winlator/recyclerview
-          mkdir -p app/src/main/java/com/winlator/container
-
-          # Копируем все пакеты com.winlator
-          find /tmp/winlator -type d -path "*/com/winlator/*" | while read dir; do
-            relative_path=$(echo "$dir" | sed 's|.*/com/winlator/||')
-            if [ -n "$relative_path" ]; then
-              mkdir -p "app/src/main/java/com/winlator/$relative_path"
-              cp -R "$dir"/* "app/src/main/java/com/winlator/$relative_path/" 2>/dev/null || true
-            fi
-          done
-
-          # Показываем что скопировали
-          find app/src/main/java/com/winlator -type f | sort
-
-      - name: Copy native libraries
-        run: |
-          mkdir -p app/src/main/jniLibs/arm64-v8a
-          mkdir -p app/src/main/jniLibs/armeabi-v7a
+          git clone --depth 1 https://github.com/brunodev85/winlator.git /tmp/winlator
           
-          # Ищем и копируем .so файлы
-          find /tmp/winlator -name "*.so" -type f | while read lib; do
-            # Определяем архитектуру
-            if echo "$lib" | grep -q "arm64-v8a\|aarch64"; then
-              cp "$lib" app/src/main/jniLibs/arm64-v8a/
-            elif echo "$lib" | grep -q "armeabi-v7a\|armv7"; then
-              cp "$lib" app/src/main/jniLibs/armeabi-v7a/
-            fi
-          done
-
-          # Показываем что скопировали
-          find app/src/main/jniLibs -type f | sort
-
-      - name: Commit and Push
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          echo "=== Структура папок ==="
+          find /tmp/winlator -type d | head -50
           
-          git add app/src/main/java/com/winlator/
-          git add app/src/main/jniLibs/
+          echo ""
+          echo "=== Java/Kotlin файлы ==="
+          find /tmp/winlator -name "*.kt" -o -name "*.java" | head -30
           
-          if git diff --staged --quiet; then
-            echo "Нет изменений для коммита."
-          else
-            git commit -m "🤖 Полная синхронизация Winlator: java + native libs"
-            git push origin main
-          fi
+          echo ""
+          echo "=== .so файлы ==="
+          find /tmp/winlator -name "*.so" | head -20
+          
+          echo ""
+          echo "=== app/src структура ==="
+          find /tmp/winlator/app/src -type d 2>/dev/null | head -30
