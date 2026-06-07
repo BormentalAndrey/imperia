@@ -46,10 +46,10 @@ class NFSLauncherActivity : AppCompatActivity() {
             text = "Настройки контейнера:\n" +
                    "• Экран: 800x600\n" +
                    "• Драйвер: Turnip\n" +
-                   "• DX Wrapper: WineD3D\n" +
+                   "• DX Wrapper: DXVK\n" +
                    "• Windows: XP\n" +
-                   "• Box64: Stability\n" +
-                   "• MESA: 2003 / GL 4.5"
+                   "• Box64: 0.3.7\n" +
+                   "• MESA: GL 4.5"
             textSize = 12f
             setPadding(0, 8, 0, 16)
         })
@@ -61,7 +61,7 @@ class NFSLauncherActivity : AppCompatActivity() {
         }
         layout.addView(statusText)
         
-        progressBar = ProgressBar(this).apply {
+        progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = false
             max = 100
             visibility = ProgressBar.GONE
@@ -69,7 +69,7 @@ class NFSLauncherActivity : AppCompatActivity() {
         layout.addView(progressBar)
         
         actionButton = Button(this).apply {
-            text = "Загрузить игру"
+            text = "ЗАГРУЗИТЬ ИГРУ"
             setOnClickListener {
                 if (downloader.isGameInstalled()) {
                     launchGame()
@@ -128,12 +128,13 @@ class NFSLauncherActivity : AppCompatActivity() {
             return
         }
         
+        // Передаем точные пути для DirectLauncher
         val intent = Intent(this, DirectLauncher::class.java).apply {
             putExtra("GAME_ID", "nfsu2")
             putExtra("EXE_NAME", "speed2.exe")
+            // Убедитесь, что NFSDownloader корректно отдает абсолютные пути
             putExtra("EXE_PATH", NFSDownloader.EXE_FILE.absolutePath)
             putExtra("GAME_PATH", NFSDownloader.GAME_DIR.absolutePath)
-            putExtra("CONTAINER_CONFIG", "nfsu2_container.wcp")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         startActivity(intent)
