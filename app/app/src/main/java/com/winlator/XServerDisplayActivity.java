@@ -971,11 +971,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             Intent intent = getIntent();
             if (intent.hasExtra("exec_path")) {
                 String rawPath = intent.getStringExtra("exec_path");
+                android.util.Log.d("XServerDebug", "Received raw exec_path: " + rawPath);
+                
                 if (rawPath != null && rawPath.matches("[A-Za-z]:.*")) {
                     execPath = rawPath;
                 } else {
                     execPath = WineUtils.unixToDOSPath(rawPath, container);
                 }
+                android.util.Log.d("XServerDebug", "Converted execPath: " + execPath);
 
                 if (execPath != null && execPath.endsWith(".lnk")) {
                     cmdArgs = "\""+execPath+"\"";
@@ -985,14 +988,26 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         if (execPath != null) {
-            // ИСПРАВЛЕНИЕ: заменяем обратные слеши на прямые
-            // Wine отлично понимает пути с / вместо \
+            // ИСПРАВЛЕНИЕ: разделяем путь на директорию и имя файла для winhandler.exe
             String cleanPath = execPath.replace("\\", "/");
-            
-            android.util.Log.d("XServerDebug", "Original execPath: " + execPath);
             android.util.Log.d("XServerDebug", "Cleaned path: " + cleanPath);
             
-            cmdArgs = "\"" + cleanPath + "\"" + execArgs;
+            // Находим последний слеш для разделения
+            int lastSlash = cleanPath.lastIndexOf('/');
+            String execDir;
+            String filename;
+            
+            if (lastSlash > 0) {
+                execDir = cleanPath.substring(0, lastSlash);
+                filename = cleanPath.substring(lastSlash + 1);
+            } else {
+                execDir = cleanPath;
+                filename = cleanPath;
+            }
+            
+            // Формат для winhandler.exe: /dir "D:/nfsu2" "SPEED2.EXE"
+            cmdArgs = "/dir \"" + execDir + "\" \"" + filename + "\"" + execArgs;
+            android.util.Log.d("XServerDebug", "Winhandler args: " + cmdArgs);
         }
 
         if (cmdArgs.isEmpty()) {
@@ -1004,7 +1019,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             overrideEnvVars.remove("EXTRA_EXEC_ARGS");
         }
         
-        return "C:\\windows\\winhandler.exe "+cmdArgs;
+        String fullCommand = "C:\\windows\\winhandler.exe " + cmdArgs;
+        android.util.Log.d("XServerDebug", "Full command: " + fullCommand);
+        return fullCommand;
     }
 
     public XServer getXServer() {
