@@ -1,6 +1,9 @@
 package com.winlator
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -15,6 +18,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.winlator.container.Container
 import com.winlator.container.ContainerManager
 import com.winlator.core.Callback
@@ -22,6 +27,7 @@ import com.winlator.xenvironment.RootFS
 import org.json.JSONObject
 import java.io.File
 
+@SuppressLint("SetTextI18n")
 class SplashActivity : AppCompatActivity() {
 
     private lateinit var downloader: NFSDownloader
@@ -51,13 +57,23 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 
+    private val legacyPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            updateUI()
+        } else {
+            Toast.makeText(this, "Для работы требуется разрешение на чтение файлов!", Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         downloader = NFSDownloader(this)
         setupUI()
-        updateUI()
         checkStoragePermissions()
+        updateUI()
         
         // Логируем информацию для отладки
         logDebugInfo()
@@ -85,6 +101,12 @@ class SplashActivity : AppCompatActivity() {
                     val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
                     storagePermissionLauncher.launch(intent)
                 }
+            }
+        } else {
+            // Поддержка старых версий Android (ниже Android 11)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) 
+                != PackageManager.PERMISSION_GRANTED) {
+                legacyPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
             }
         }
     }
@@ -150,22 +172,26 @@ class SplashActivity : AppCompatActivity() {
         progressBar.visibility = View.VISIBLE
         downloader.downloadGame(
             onProgress = { progress ->
-                runOnUiThread {
-                    progressBar.isIndeterminate = false
-                    progressBar.progress = progress
-                    statusText.text = "Скачивание: $progress%"
+                if (!isDestroyed && !isFinishing) {
+                    runOnUiThread {
+                        progressBar.isIndeterminate = false
+                        progressBar.progress = progress
+                        statusText.text = "Скачивание: $progress%"
+                    }
                 }
             },
             onComplete = { success ->
-                runOnUiThread {
-                    progressBar.visibility = View.GONE
-                    actionButton.isEnabled = true
-                    if (success) {
-                        Toast.makeText(this, "Игра установлена!", Toast.LENGTH_LONG).show()
-                        updateUI()
-                    } else {
-                        statusText.text = "Ошибка скачивания"
-                        actionButton.text = "ПОВТОРИТЬ"
+                if (!isDestroyed && !isFinishing) {
+                    runOnUiThread {
+                        progressBar.visibility = View.GONE
+                        actionButton.isEnabled = true
+                        if (success) {
+                            Toast.makeText(this@SplashActivity, "Игра установлена!", Toast.LENGTH_LONG).show()
+                            updateUI()
+                        } else {
+                            statusText.text = "Ошибка скачивания"
+                            actionButton.text = "ПОВТОРИТЬ"
+                        }
                     }
                 }
             }
@@ -181,8 +207,10 @@ class SplashActivity : AppCompatActivity() {
         return try {
             val cpuInfo = File("/proc/cpuinfo").readText()
             when {
-                cpuInfo.contains("Qualcomm") || cpuInfo.contains("Snapdragon") -> "turnip"
-                cpuInfo.contains("MT") || cpuInfo.contains("MediaTek") -> "virgl"
+                cpuInfo.contains("Qualcomm", ignoreCase = true) || 
+                cpuInfo.contains("Snapdragon", ignoreCase = true) -> "turnip"
+                cpuInfo.contains("MT", ignoreCase = true) || 
+                cpuInfo.contains("MediaTek", ignoreCase = true) -> "virgl"
                 else -> "turnip"
             }
         } catch (e: Exception) {
@@ -213,7 +241,7 @@ class SplashActivity : AppCompatActivity() {
             return
         }
 
-        if (containerManager.containers.isEmpty()) {
+        if (containerManager.containers.isEmpty() || existingContainer == null) {
             actionButton.isEnabled = false
             statusText.text = "Создание контейнера..."
             progressBar.visibility = View.VISIBLE
@@ -238,16 +266,18 @@ class SplashActivity : AppCompatActivity() {
 
             containerManager.createContainerAsync(data, object : Callback<Container> {
                 override fun call(container: Container?) {
-                    runOnUiThread {
-                        progressBar.visibility = View.GONE
-                        actionButton.isEnabled = true
-                        if (container != null) {
-                            containerReady = true
-                            Toast.makeText(this@SplashActivity, "Контейнер создан! Диск D: привязан к Download", Toast.LENGTH_SHORT).show()
-                            updateUI()
-                            launchGame()
-                        } else {
-                            statusText.text = "Ошибка создания контейнера"
+                    if (!isDestroyed && !isFinishing) {
+                        runOnUiThread {
+                            progressBar.visibility = View.GONE
+                            actionButton.isEnabled = true
+                            if (container != null) {
+                                containerReady = true
+                                Toast.makeText(this@SplashActivity, "Контейнер создан! Диск D: привязан к Download", Toast.LENGTH_SHORT).show()
+                                updateUI()
+                                launchGame()
+                            } else {
+                                statusText.text = "Ошибка создания контейнера"
+                            }
                         }
                     }
                 }
@@ -261,7 +291,7 @@ class SplashActivity : AppCompatActivity() {
     
     // Создание .desktop файла с правильной рабочей директорией
     private fun createDesktopFile(container: Container): File? {
-        try {
+        return try {
             val desktopDir = File(container.rootDir, "desktop_files")
             if (!desktopDir.exists()) {
                 desktopDir.mkdirs()
@@ -288,10 +318,10 @@ class SplashActivity : AppCompatActivity() {
             Log.d("SplashActivity", "Desktop файл создан: ${desktopFile.absolutePath}")
             Log.d("SplashActivity", "Содержимое:\n$desktopContent")
             
-            return desktopFile
+            desktopFile
         } catch (e: Exception) {
             Log.e("SplashActivity", "Ошибка создания desktop файла", e)
-            return null
+            null
         }
     }
 
@@ -352,7 +382,10 @@ class SplashActivity : AppCompatActivity() {
     // Сохранение лога ошибки на телефон
     private fun saveDebugLog(errorMessage: String) {
         try {
-            val logFile = File(Environment.getExternalStorageDirectory(), "Download/nfsu2/launcher_debug.log")
+            val logDir = File(Environment.getExternalStorageDirectory(), "Download/nfsu2")
+            if (!logDir.exists()) logDir.mkdirs()
+
+            val logFile = File(logDir, "launcher_debug.log")
             val logText = """
                 === NFS Underground 2 Launcher Debug Log ===
                 Время: ${System.currentTimeMillis()}
