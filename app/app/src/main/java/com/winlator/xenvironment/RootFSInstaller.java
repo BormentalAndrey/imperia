@@ -1,6 +1,7 @@
 package com.winlator.xenvironment;
 
 import android.content.Context;
+import android.util.Log;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -26,6 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 
 public abstract class RootFSInstaller {
+    private static final String TAG = "RootFSInstaller";
     public static final byte LATEST_VERSION = 19; // TODO increment it on rootfs update
     public static final byte UPDATE_WINEPREFIX_VERSION = 16; // set it if main wine version change
     public static final String FILENAME = "rootfs.tzst";
@@ -35,7 +37,7 @@ public abstract class RootFSInstaller {
         for (Container container : manager.getContainers()) {
             String rfsVersion = container.getExtra("rfsVersion");
             String wineVersion = container.getWineVersion();
-            if (!rfsVersion.isEmpty() && WineInfo.isMainWineVersion(wineVersion) && Short.parseShort(rfsVersion) <= UPDATE_WINEPREFIX_VERSION) {
+            if (rfsVersion != null && !rfsVersion.isEmpty() && WineInfo.isMainWineVersion(wineVersion) && Short.parseShort(rfsVersion) <= UPDATE_WINEPREFIX_VERSION) {
                 container.putExtra("wineprefixNeedsUpdate", "t");
             }
 
@@ -71,7 +73,9 @@ public abstract class RootFSInstaller {
                 rootFS.createRFSVersionFile(LATEST_VERSION);
                 resetContainerRFSVersions(activity);
             }
-            else AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+            else {
+                activity.runOnUiThread(() -> AppUtils.showToast(activity, R.string.unable_to_install_system_files));
+            }
 
             dialog.closeOnUiThread();
         });
@@ -134,11 +138,13 @@ public abstract class RootFSInstaller {
             ArrayList<String> system32Files = new ArrayList<>();
             ArrayList<String> syswow64Files = new ArrayList<>();
 
-            for (File dstFile : dstFiles) {
-                for (File srcFile : srcFiles) {
-                    if (dstFile.getName().equals(srcFile.getName())) {
-                        if (FileUtils.contentEquals(srcFile, dstFile)) system32Files.add(srcFile.getName());
-                        break;
+            if (dstFiles != null && srcFiles != null) {
+                for (File dstFile : dstFiles) {
+                    for (File srcFile : srcFiles) {
+                        if (dstFile.getName().equals(srcFile.getName())) {
+                            if (FileUtils.contentEquals(srcFile, dstFile)) system32Files.add(srcFile.getName());
+                            break;
+                        }
                     }
                 }
             }
@@ -146,11 +152,13 @@ public abstract class RootFSInstaller {
             dstFiles = containerSysWoW64Dir.listFiles();
             srcFiles = wineSysWoW64Dir.listFiles();
 
-            for (File dstFile : dstFiles) {
-                for (File srcFile : srcFiles) {
-                    if (dstFile.getName().equals(srcFile.getName())) {
-                        if (FileUtils.contentEquals(srcFile, dstFile)) syswow64Files.add(srcFile.getName());
-                        break;
+            if (dstFiles != null && srcFiles != null) {
+                for (File dstFile : dstFiles) {
+                    for (File srcFile : srcFiles) {
+                        if (dstFile.getName().equals(srcFile.getName())) {
+                            if (FileUtils.contentEquals(srcFile, dstFile)) syswow64Files.add(srcFile.getName());
+                            break;
+                        }
                     }
                 }
             }
@@ -178,10 +186,12 @@ public abstract class RootFSInstaller {
                 FileUtils.delete(outputFile);
                 TarCompressorUtils.compress(TarCompressorUtils.Type.ZSTD, new File(containerPatternDir, ".wine"), outputFile, 22);
 
+            } catch (JSONException e) {
+                Log.e(TAG, "Failed to generate common_dlls JSON data", e);
+            } finally {
                 FileUtils.delete(containerPatternDir);
                 preloaderDialog.closeOnUiThread();
             }
-            catch (JSONException e) {}
         });
     }
 }
