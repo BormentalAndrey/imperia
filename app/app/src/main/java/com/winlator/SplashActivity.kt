@@ -207,38 +207,26 @@ class SplashActivity : AppCompatActivity() {
                 return
             }
             
-            // Получаем Shortcut через loadShortcuts как в MainActivity
-            val shortcuts = containerManager.loadShortcuts(null)
-            var nfsShortcut: com.winlator.container.Shortcut? = null
+            // Создаём ярлык с ПРАВИЛЬНЫМ путём Z:\sdcard\download\nfsu2\SPEED2.EXE
+            val desktopDir = File(container.rootDir, ".wine/drive_c/users/xuser/Desktop")
+            desktopDir.mkdirs()
+            val shortcutFile = File(desktopDir, "NFS Underground 2.desktop")
             
-            // Ищем существующий ярлык NFS
-            for (s in shortcuts) {
-                if (s.name.contains("NFS", ignoreCase = true) || 
-                    s.path.contains("SPEED2", ignoreCase = true)) {
-                    nfsShortcut = s
-                    break
-                }
-            }
+            // Всегда перезаписываем с правильным путём Z:
+            shortcutFile.writeText("""
+                [Desktop Entry]
+                Type=Application
+                Name=NFS Underground 2
+                Exec=wine "Z:\\sdcard\\download\\nfsu2\\SPEED2.EXE"
+                Path=Z:\\sdcard\\download\\nfsu2
+            """.trimIndent())
             
-            // Если ярлык не найден — создаём новый
-            if (nfsShortcut == null) {
-                val desktopDir = File(container.rootDir, ".wine/drive_c/users/xuser/Desktop")
-                desktopDir.mkdirs()
-                val shortcutFile = File(desktopDir, "NFS Underground 2.desktop")
-                shortcutFile.writeText("""
-                    [Desktop Entry]
-                    Type=Application
-                    Name=NFS Underground 2
-                    Exec=wine "D:\\nfsu2\\SPEED2.EXE"
-                    Path=D:\\nfsu2
-                """.trimIndent())
-                nfsShortcut = com.winlator.container.Shortcut(container, shortcutFile)
-            }
+            val nfsShortcut = com.winlator.container.Shortcut(container, shortcutFile)
             
             Log.d("SplashActivity", "Shortcut path: ${nfsShortcut.file.absolutePath}")
             Log.d("SplashActivity", "Container ID: ${container.id}")
+            Log.d("SplashActivity", "Exec: wine \"Z:\\sdcard\\download\\nfsu2\\SPEED2.EXE\"")
             
-            // Запускаем точно как MainActivity.runShortcut()
             val intent = Intent(this, XServerDisplayActivity::class.java)
             intent.putExtra("container_id", container.id)
             intent.putExtra("shortcut_path", nfsShortcut.file.absolutePath)
