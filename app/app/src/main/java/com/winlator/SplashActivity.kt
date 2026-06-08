@@ -196,11 +196,15 @@ class SplashActivity : AppCompatActivity() {
                 return
             }
             
-            Log.d("SplashActivity", "Launching: ${exeFile.absolutePath}, container=${container.id}")
+            // Передаём DOS-путь Z:\sdcard\download\nfsu2\SPEED2.EXE
+            // Z: = корень /, всегда доступен в Wine
+            val dosPath = "Z:\\sdcard\\download\\nfsu2\\SPEED2.EXE"
+            
+            Log.d("SplashActivity", "Launching: $dosPath, container=${container.id}")
             
             startActivity(Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
-                putExtra("exec_path", exeFile.absolutePath)
+                putExtra("exec_path", dosPath)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             })
             finish()
