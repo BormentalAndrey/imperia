@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.util.Log
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -36,7 +37,6 @@ class SplashActivity : AppCompatActivity() {
         setupUI()
         updateUI()
         
-        // Запрос разрешения для Android 11+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
                 val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
@@ -74,7 +74,7 @@ class SplashActivity : AppCompatActivity() {
         actionButton = Button(this).apply {
             setOnClickListener {
                 if (containerReady) {
-                    launchWithExec()
+                    launchGame()
                 } else if (exeOnDriveD.exists() || downloader.isGameInstalled()) {
                     prepareContainer()
                 } else {
@@ -172,8 +172,7 @@ class SplashActivity : AppCompatActivity() {
                             containerReady = true
                             Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
                             updateUI()
-                            // Автозапуск после создания
-                            launchWithExec()
+                            launchGame()
                         } else {
                             statusText.text = "Ошибка создания контейнера"
                         }
@@ -183,11 +182,11 @@ class SplashActivity : AppCompatActivity() {
         } else {
             containerReady = true
             updateUI()
-            launchWithExec()
+            launchGame()
         }
     }
     
-    private fun launchWithExec() {
+    private fun launchGame() {
         if (!containerReady) {
             prepareContainer()
             return
@@ -204,28 +203,52 @@ class SplashActivity : AppCompatActivity() {
             }
             
             if (!exeOnDriveD.exists()) {
-                val oldExe = NFSDownloader.EXE_FILE
-                if (oldExe.exists()) {
-                    statusText.text = "Копирование на диск D..."
-                    exeOnDriveD.parentFile?.mkdirs()
-                    oldExe.copyTo(exeOnDriveD, true)
-                } else {
-                    Toast.makeText(this, "Файл не найден\nПоложите игру в:\n/sdcard/download/nfsu2/", Toast.LENGTH_LONG).show()
-                    return
+                Toast.makeText(this, "Файл не найден\n${exeOnDriveD.absolutePath}", Toast.LENGTH_LONG).show()
+                return
+            }
+            
+            // Получаем Shortcut через loadShortcuts как в MainActivity
+            val shortcuts = containerManager.loadShortcuts(null)
+            var nfsShortcut: com.winlator.container.Shortcut? = null
+            
+            // Ищем существующий ярлык NFS
+            for (s in shortcuts) {
+                if (s.name.contains("NFS", ignoreCase = true) || 
+                    s.path.contains("SPEED2", ignoreCase = true)) {
+                    nfsShortcut = s
+                    break
                 }
             }
             
-            statusText.text = "Запуск игры..."
+            // Если ярлык не найден — создаём новый
+            if (nfsShortcut == null) {
+                val desktopDir = File(container.rootDir, ".wine/drive_c/users/xuser/Desktop")
+                desktopDir.mkdirs()
+                val shortcutFile = File(desktopDir, "NFS Underground 2.desktop")
+                shortcutFile.writeText("""
+                    [Desktop Entry]
+                    Type=Application
+                    Name=NFS Underground 2
+                    Exec=wine "D:\\nfsu2\\SPEED2.EXE"
+                    Path=D:\\nfsu2
+                """.trimIndent())
+                nfsShortcut = com.winlator.container.Shortcut(container, shortcutFile)
+            }
             
+            Log.d("SplashActivity", "Shortcut path: ${nfsShortcut.file.absolutePath}")
+            Log.d("SplashActivity", "Container ID: ${container.id}")
+            
+            // Запускаем точно как MainActivity.runShortcut()
             val intent = Intent(this, XServerDisplayActivity::class.java)
             intent.putExtra("container_id", container.id)
-            intent.putExtra("exec_path", "D:\\nfsu2\\SPEED2.EXE")
+            intent.putExtra("shortcut_path", nfsShortcut.file.absolutePath)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             
             startActivity(intent)
             finish()
             
         } catch (e: Exception) {
+            Log.e("SplashActivity", "Launch error", e)
             Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
