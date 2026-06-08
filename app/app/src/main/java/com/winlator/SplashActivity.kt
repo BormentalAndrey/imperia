@@ -207,29 +207,13 @@ class SplashActivity : AppCompatActivity() {
                 return
             }
             
-            // Создаём ярлык с ПРАВИЛЬНЫМ путём Z:\sdcard\download\nfsu2\SPEED2.EXE
-            val desktopDir = File(container.rootDir, ".wine/drive_c/users/xuser/Desktop")
-            desktopDir.mkdirs()
-            val shortcutFile = File(desktopDir, "NFS Underground 2.desktop")
-            
-            // Всегда перезаписываем с правильным путём Z:
-            shortcutFile.writeText("""
-                [Desktop Entry]
-                Type=Application
-                Name=NFS Underground 2
-                Exec=wine "Z:\\sdcard\\download\\nfsu2\\SPEED2.EXE"
-                Path=Z:\\sdcard\\download\\nfsu2
-            """.trimIndent())
-            
-            val nfsShortcut = com.winlator.container.Shortcut(container, shortcutFile)
-            
-            Log.d("SplashActivity", "Shortcut path: ${nfsShortcut.file.absolutePath}")
+            // Запускаем как MainActivity: exec_path с Unix-путём
+            Log.d("SplashActivity", "Launching: ${exeOnDriveD.absolutePath}")
             Log.d("SplashActivity", "Container ID: ${container.id}")
-            Log.d("SplashActivity", "Exec: wine \"Z:\\sdcard\\download\\nfsu2\\SPEED2.EXE\"")
             
             val intent = Intent(this, XServerDisplayActivity::class.java)
             intent.putExtra("container_id", container.id)
-            intent.putExtra("shortcut_path", nfsShortcut.file.absolutePath)
+            intent.putExtra("exec_path", exeOnDriveD.absolutePath)
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             
             startActivity(intent)
