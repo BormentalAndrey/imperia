@@ -952,6 +952,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return getIntent().getBooleanExtra("generate_wineprefix", false);
     }
 
+    // ========== ИСПРАВЛЕННЫЙ МЕТОД getWineStartCommand() ==========
     private String getWineStartCommand() {
         String cmdArgs = "";
         String execPath = null;
@@ -976,7 +977,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                     execPath = WineUtils.unixToDOSPath(rawPath, container);
                 }
 
-                if (execPath.endsWith(".lnk")) {
+                if (execPath != null && execPath.endsWith(".lnk")) {
                     cmdArgs = "\""+execPath+"\"";
                     execPath = null;
                 }
@@ -984,40 +985,25 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         if (execPath != null) {
-            String execDir;
-            String filename;
-
-            // FIX: Robust DOS path extraction to properly set working directory for Winlator's winhandler.exe
-            if (execPath.contains("\\")) {
-                int lastSlashIndex = execPath.lastIndexOf('\\');
-                execDir = execPath.substring(0, lastSlashIndex);
-                if (execDir.endsWith(":")) {
-                    execDir += "\\"; 
-                }
-                filename = execPath.substring(lastSlashIndex + 1);
-            } else {
-                execDir = FileUtils.getDirname(execPath);
-                filename = FileUtils.getName(execPath);
-            }
-
-            int dotIndex, spaceIndex;
-            if ((dotIndex = filename.lastIndexOf(".")) != -1 && (spaceIndex = filename.indexOf(" ", dotIndex)) != -1) {
-                execArgs = filename.substring(spaceIndex+1)+execArgs;
-                filename = filename.substring(0, spaceIndex);
-            }
-
-            android.util.Log.d("XServerDebug", "Parsed ExecDir: " + execDir);
-            android.util.Log.d("XServerDebug", "Parsed Filename: " + filename);
-
-            cmdArgs = "/dir "+StringUtils.escapeDOSPath(execDir)+" \""+filename+"\""+execArgs;
+            // ИСПРАВЛЕНИЕ: заменяем обратные слеши на прямые
+            // Wine отлично понимает пути с / вместо \
+            String cleanPath = execPath.replace("\\", "/");
+            
+            android.util.Log.d("XServerDebug", "Original execPath: " + execPath);
+            android.util.Log.d("XServerDebug", "Cleaned path: " + cleanPath);
+            
+            cmdArgs = "\"" + cleanPath + "\"" + execArgs;
         }
 
-        if (cmdArgs.isEmpty()) cmdArgs = "/dir C:\\windows \"wfm.exe\"";
+        if (cmdArgs.isEmpty()) {
+            cmdArgs = "/dir C:\\windows \"wfm.exe\"";
+        }
 
         if (overrideEnvVars != null && overrideEnvVars.has("EXTRA_EXEC_ARGS")) {
             cmdArgs += " "+overrideEnvVars.get("EXTRA_EXEC_ARGS");
             overrideEnvVars.remove("EXTRA_EXEC_ARGS");
         }
+        
         return "C:\\windows\\winhandler.exe "+cmdArgs;
     }
 
