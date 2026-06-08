@@ -166,6 +166,13 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (!isGenerateWineprefix()) {
             ContainerManager containerManager = new ContainerManager(this);
             container = containerManager.getContainerById(getIntent().getIntExtra("container_id", 0));
+
+            // DEBUG LOGS FOR LAUNCH PARAMS
+            String shortcutPath = getIntent().getStringExtra("shortcut_path");
+            String execPathDebug = getIntent().getStringExtra("exec_path");
+            android.util.Log.d("XServerDebug", "Received shortcut_path: " + shortcutPath);
+            android.util.Log.d("XServerDebug", "Received exec_path: " + execPathDebug);
+
             containerManager.activateContainer(container);
 
             boolean wineprefixNeedsUpdate = container.getExtra("wineprefixNeedsUpdate").equals("t");
@@ -190,7 +197,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
             if (wineInfo != WineInfo.MAIN_WINE_INFO) rootFS.setWinePath(wineInfo.path);
 
-            String shortcutPath = getIntent().getStringExtra("shortcut_path");
             if (shortcutPath != null && !shortcutPath.isEmpty()) shortcut = new Shortcut(container, new File(shortcutPath));
 
             String graphicsDriver = container.getGraphicsDriver();
@@ -224,7 +230,19 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             }
             else {
                 Intent intent = getIntent();
-                if (intent.hasExtra("exec_path")) win32AppWorkarounds.applyStartupWorkarounds(FileUtils.getName(intent.getStringExtra("exec_path")));
+                if (intent.hasExtra("exec_path")) {
+                    String execPathStr = intent.getStringExtra("exec_path");
+                    String appName = "";
+                    if (execPathStr != null) {
+                        // FIX: extract name correctly from DOS paths
+                        if (execPathStr.contains("\\")) {
+                            appName = execPathStr.substring(execPathStr.lastIndexOf("\\") + 1);
+                        } else {
+                            appName = FileUtils.getName(execPathStr);
+                        }
+                    }
+                    win32AppWorkarounds.applyStartupWorkarounds(appName);
+                }
             }
 
             this.graphicsDriver = GraphicsDrivers.parseIdentifiers(graphicsDriver);
@@ -953,7 +971,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             if (intent.hasExtra("exec_path")) {
                 String rawPath = intent.getStringExtra("exec_path");
                 if (rawPath != null && rawPath.matches("[A-Za-z]:.*")) {
-                // Путь уже в DOS-формате (Z:\...), не конвертируем
                     execPath = rawPath;
                 } else {
                     execPath = WineUtils.unixToDOSPath(rawPath, container);
@@ -967,13 +984,31 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         if (execPath != null) {
-            String execDir = FileUtils.getDirname(execPath);
-            String filename = FileUtils.getName(execPath);
+            String execDir;
+            String filename;
+
+            // FIX: Robust DOS path extraction to properly set working directory for Winlator's winhandler.exe
+            if (execPath.contains("\\")) {
+                int lastSlashIndex = execPath.lastIndexOf('\\');
+                execDir = execPath.substring(0, lastSlashIndex);
+                if (execDir.endsWith(":")) {
+                    execDir += "\\"; 
+                }
+                filename = execPath.substring(lastSlashIndex + 1);
+            } else {
+                execDir = FileUtils.getDirname(execPath);
+                filename = FileUtils.getName(execPath);
+            }
+
             int dotIndex, spaceIndex;
             if ((dotIndex = filename.lastIndexOf(".")) != -1 && (spaceIndex = filename.indexOf(" ", dotIndex)) != -1) {
                 execArgs = filename.substring(spaceIndex+1)+execArgs;
                 filename = filename.substring(0, spaceIndex);
             }
+
+            android.util.Log.d("XServerDebug", "Parsed ExecDir: " + execDir);
+            android.util.Log.d("XServerDebug", "Parsed Filename: " + filename);
+
             cmdArgs = "/dir "+StringUtils.escapeDOSPath(execDir)+" \""+filename+"\""+execArgs;
         }
 
