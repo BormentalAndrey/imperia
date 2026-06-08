@@ -35,14 +35,10 @@ class SplashActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var actionButton: Button
     private var containerReady = false
+    private var isPreparing = false
 
-    // ИСПРАВЛЕНО: путь с большой буквой D (Download)
     private val exeFile = File(Environment.getExternalStorageDirectory(), "Download/nfsu2/SPEED2.EXE")
-    
-    // Путь в стиле Windows для диска D: (ИСПРАВЛЕНО)
     private val gamePathOnD = "D:\\nfsu2\\SPEED2.EXE"
-    
-    // Рабочая директория для игры (где лежат папки Global, Cars и т.д.)
     private val workingDir = "D:\\nfsu2"
 
     private val storagePermissionLauncher = registerForActivityResult(
@@ -51,6 +47,11 @@ class SplashActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (Environment.isExternalStorageManager()) {
                 updateUI()
+                if (!containerReady && (exeFile.exists() || downloader.isGameInstalled())) {
+                    prepareContainer()
+                } else if (containerReady) {
+                    launchGame()
+                }
             } else {
                 Toast.makeText(this, "Для работы требуется разрешение на доступ к файлам!", Toast.LENGTH_LONG).show()
             }
@@ -62,6 +63,11 @@ class SplashActivity : AppCompatActivity() {
     ) { isGranted ->
         if (isGranted) {
             updateUI()
+            if (!containerReady && (exeFile.exists() || downloader.isGameInstalled())) {
+                prepareContainer()
+            } else if (containerReady) {
+                launchGame()
+            }
         } else {
             Toast.makeText(this, "Для работы требуется разрешение на чтение файлов!", Toast.LENGTH_LONG).show()
         }
@@ -74,8 +80,6 @@ class SplashActivity : AppCompatActivity() {
         setupUI()
         checkStoragePermissions()
         updateUI()
-        
-        // Логируем информацию для отладки
         logDebugInfo()
     }
     
@@ -103,7 +107,6 @@ class SplashActivity : AppCompatActivity() {
                 }
             }
         } else {
-            // Поддержка старых версий Android (ниже Android 11)
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) 
                 != PackageManager.PERMISSION_GRANTED) {
                 legacyPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
@@ -202,7 +205,6 @@ class SplashActivity : AppCompatActivity() {
         return try { RootFS.find(this) != null } catch (e: Exception) { false }
     }
     
-    // Автоопределение графического драйвера
     private fun detectGraphicsDriver(): String {
         return try {
             val cpuInfo = File("/proc/cpuinfo").readText()
@@ -219,6 +221,12 @@ class SplashActivity : AppCompatActivity() {
     }
 
     private fun prepareContainer() {
+        if (isPreparing) {
+            Log.d("SplashActivity", "Already preparing, skipping")
+            return
+        }
+        isPreparing = true
+        
         if (!isRootFSInstalled()) {
             Toast.makeText(this, "Первичная настройка Winlator...", Toast.LENGTH_LONG).show()
             startActivity(Intent(this, MainActivity::class.java).apply {
@@ -229,67 +237,62 @@ class SplashActivity : AppCompatActivity() {
         }
 
         val containerManager = ContainerManager(this)
-        
-        // Проверяем, существует ли уже наш контейнер
         val existingContainer = containerManager.containers.find { it.name == "NFS Underground 2" }
         
         if (existingContainer != null) {
-            Log.d("SplashActivity", "Найден существующий контейнер: ${existingContainer.id}")
+            Log.d("SplashActivity", "Found existing container: ${existingContainer.id}")
             containerReady = true
+            isPreparing = false
             updateUI()
             launchGame()
             return
         }
 
-        if (containerManager.containers.isEmpty() || existingContainer == null) {
-            actionButton.isEnabled = false
-            statusText.text = "Создание контейнера..."
-            progressBar.visibility = View.VISIBLE
-            progressBar.isIndeterminate = true
+        actionButton.isEnabled = false
+        statusText.text = "Создание контейнера..."
+        progressBar.visibility = View.VISIBLE
+        progressBar.isIndeterminate = true
 
-            val data = JSONObject().apply {
-                put("name", "NFS Underground 2")
-                put("screenSize", "800x600")
-                put("graphicsDriver", detectGraphicsDriver()) // Автоопределение
-                put("dxwrapper", "wined3d")
-                put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
-                
-                // КЛЮЧЕВОЕ: Настройка диска D:
-                val drives = JSONObject().apply {
-                    put("d", JSONObject().apply {
-                        put("path", Environment.getExternalStorageDirectory().absolutePath + "/Download")
-                        put("type", "External")
-                    })
-                }
-                put("drives", drives)
+        val data = JSONObject().apply {
+            put("name", "NFS Underground 2")
+            put("screenSize", "800x600")
+            put("graphicsDriver", detectGraphicsDriver())
+            put("dxwrapper", "wined3d")
+            put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
+            
+            val drives = JSONObject().apply {
+                put("d", JSONObject().apply {
+                    put("path", Environment.getExternalStorageDirectory().absolutePath + "/Download")
+                    put("type", "External")
+                })
             }
+            put("drives", drives)
+        }
 
-            containerManager.createContainerAsync(data, object : Callback<Container> {
-                override fun call(container: Container?) {
-                    if (!isDestroyed && !isFinishing) {
-                        runOnUiThread {
-                            progressBar.visibility = View.GONE
-                            actionButton.isEnabled = true
-                            if (container != null) {
-                                containerReady = true
-                                Toast.makeText(this@SplashActivity, "Контейнер создан! Диск D: привязан к Download", Toast.LENGTH_SHORT).show()
-                                updateUI()
-                                launchGame()
-                            } else {
-                                statusText.text = "Ошибка создания контейнера"
-                            }
+        containerManager.createContainerAsync(data, object : Callback<Container> {
+            override fun call(container: Container?) {
+                if (!isDestroyed && !isFinishing) {
+                    runOnUiThread {
+                        progressBar.visibility = View.GONE
+                        actionButton.isEnabled = true
+                        isPreparing = false
+                        if (container != null) {
+                            containerReady = true
+                            Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
+                            updateUI()
+                            launchGame()
+                        } else {
+                            statusText.text = "Ошибка создания контейнера"
                         }
                     }
+                } else {
+                    isPreparing = false
                 }
-            })
-        } else {
-            containerReady = true
-            updateUI()
-            launchGame()
-        }
+            }
+        })
     }
     
-    // Создание .desktop файла с правильной рабочей директорией
+    // ИСПРАВЛЕННЫЙ МЕТОД: с экранированием обратных слешей
     private fun createDesktopFile(container: Container): File? {
         return try {
             val desktopDir = File(container.rootDir, "desktop_files")
@@ -299,11 +302,15 @@ class SplashActivity : AppCompatActivity() {
             
             val desktopFile = File(desktopDir, "nfs_underground_2.desktop")
             
+            // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: заменяем \ на \\ для экранирования
+            val escapedPath = gamePathOnD.replace("\\", "\\\\")
+            val escapedWorkingDir = workingDir.replace("\\", "\\\\")
+            
             val desktopContent = """
                 [Desktop Entry]
                 Name=Need for Speed Underground 2
-                Exec=wine "$gamePathOnD"
-                Path=$workingDir
+                Exec=wine "$escapedPath"
+                Path=$escapedWorkingDir
                 Type=Application
                 StartupNotify=false
                 Icon=default
@@ -315,12 +322,13 @@ class SplashActivity : AppCompatActivity() {
             """.trimIndent()
             
             desktopFile.writeText(desktopContent)
-            Log.d("SplashActivity", "Desktop файл создан: ${desktopFile.absolutePath}")
-            Log.d("SplashActivity", "Содержимое:\n$desktopContent")
+            Log.d("SplashActivity", "Desktop file created: ${desktopFile.absolutePath}")
+            Log.d("SplashActivity", "Escaped path: $escapedPath")
+            Log.d("SplashActivity", "Content:\n$desktopContent")
             
             desktopFile
         } catch (e: Exception) {
-            Log.e("SplashActivity", "Ошибка создания desktop файла", e)
+            Log.e("SplashActivity", "Failed to create desktop file", e)
             null
         }
     }
@@ -350,71 +358,33 @@ class SplashActivity : AppCompatActivity() {
             Log.d("SplashActivity", "=== Запуск NFS Underground 2 ===")
             Log.d("SplashActivity", "Контейнер: ${container.id}")
             Log.d("SplashActivity", "Путь в Windows: $gamePathOnD")
-            Log.d("SplashActivity", "Рабочая директория: $workingDir")
             
-            // Пытаемся создать .desktop файл для правильного запуска
-            val desktopFile = createDesktopFile(container)
+            // ИСПРАВЛЕНИЕ: используем exec_path с прямыми слешами (надежнее)
+            // Wine отлично понимает пути с / вместо \
+            val cleanPath = gamePathOnD.replace("\\", "/")
+            Log.d("SplashActivity", "Clean path for Wine: $cleanPath")
             
-            val intent = Intent(this, XServerDisplayActivity::class.java).apply {
+            startActivity(Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
+                putExtra("exec_path", cleanPath)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                
-                if (desktopFile != null && desktopFile.exists()) {
-                    // Используем .desktop файл (рекомендуемый способ)
-                    putExtra("shortcut_path", desktopFile.absolutePath)
-                    Log.d("SplashActivity", "Запуск через shortcut_path")
-                } else {
-                    // Fallback: прямой запуск через exec_path с диском D:
-                    putExtra("exec_path", gamePathOnD)
-                    Log.d("SplashActivity", "Запуск через exec_path")
-                }
-            }
-            
-            startActivity(intent)
+            })
             finish()
         } catch (e: Exception) {
             Log.e("SplashActivity", "Ошибка запуска", e)
             Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
-            saveDebugLog(e.message ?: "Неизвестная ошибка")
-        }
-    }
-    
-    // Сохранение лога ошибки на телефон
-    private fun saveDebugLog(errorMessage: String) {
-        try {
-            val logDir = File(Environment.getExternalStorageDirectory(), "Download/nfsu2")
-            if (!logDir.exists()) logDir.mkdirs()
-
-            val logFile = File(logDir, "launcher_debug.log")
-            val logText = """
-                === NFS Underground 2 Launcher Debug Log ===
-                Время: ${System.currentTimeMillis()}
-                Ошибка: $errorMessage
-                
-                Система:
-                Android: ${Build.VERSION.RELEASE}
-                Устройство: ${Build.MANUFACTURER} ${Build.MODEL}
-                
-                Файлы:
-                Игра существует: ${exeFile.exists()}
-                Путь: ${exeFile.absolutePath}
-                Размер: ${if (exeFile.exists()) exeFile.length() else 0}
-                
-                Контейнер готов: $containerReady
-            """.trimIndent()
-            
-            logFile.writeText(logText)
-            Log.d("SplashActivity", "Лог сохранен: ${logFile.absolutePath}")
-            Toast.makeText(this, "Лог сохранен в Download/nfsu2/launcher_debug.log", Toast.LENGTH_LONG).show()
-        } catch (e: Exception) {
-            Log.e("SplashActivity", "Не удалось сохранить лог", e)
         }
     }
 
     override fun onResume() {
         super.onResume()
-        if (containerReady) {
-            updateUI()
+        Log.d("SplashActivity", "onResume called, containerReady=$containerReady")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (Environment.isExternalStorageManager() && !containerReady && !isPreparing && (exeFile.exists() || downloader.isGameInstalled())) {
+                prepareContainer()
+            } else if (containerReady) {
+                launchGame()
+            }
         }
     }
 }
