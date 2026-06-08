@@ -32,7 +32,6 @@ class SplashActivity : AppCompatActivity() {
 
     private val exeFile = File(Environment.getExternalStorageDirectory(), "download/nfsu2/SPEED2.EXE")
 
-    // Регистрация коллбэка для запроса прав на современных версиях Android
     private val storagePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
@@ -51,7 +50,6 @@ class SplashActivity : AppCompatActivity() {
         downloader = NFSDownloader(this)
         setupUI()
         updateUI()
-        
         checkStoragePermissions()
     }
 
@@ -224,10 +222,8 @@ class SplashActivity : AppCompatActivity() {
                 return
             }
 
-            // Динамически преобразуем абсолютный путь Android в путь Wine (где Z: это корень файловой системы)
-            // Это исключает сбои, если /sdcard не резолвится внутри песочницы эмулятора.
-            val absolutePath = exeFile.absolutePath
-            val dosPath = "Z:" + absolutePath.replace("/", "\\\\")
+            // Формируем DOS-путь: Z:\storage\emulated\0\download\nfsu2\SPEED2.EXE
+            val dosPath = "Z:" + exeFile.absolutePath.replace("/", "\\")
 
             Log.d("SplashActivity", "Launching: $dosPath, container=${container.id}")
 
