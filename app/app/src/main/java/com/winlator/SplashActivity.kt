@@ -28,7 +28,7 @@ class SplashActivity : AppCompatActivity() {
     private lateinit var actionButton: Button
     private var containerReady = false
     
-    private val exeOnDriveD = File(Environment.getExternalStorageDirectory(), "download/nfsu2/SPEED2.EXE")
+    private val exeFile = File(Environment.getExternalStorageDirectory(), "download/nfsu2/SPEED2.EXE")
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,7 +75,7 @@ class SplashActivity : AppCompatActivity() {
             setOnClickListener {
                 if (containerReady) {
                     launchGame()
-                } else if (exeOnDriveD.exists() || downloader.isGameInstalled()) {
+                } else if (exeFile.exists() || downloader.isGameInstalled()) {
                     prepareContainer()
                 } else {
                     startDownload()
@@ -88,7 +88,7 @@ class SplashActivity : AppCompatActivity() {
     }
     
     private fun updateUI() {
-        if (exeOnDriveD.exists() || downloader.isGameInstalled()) {
+        if (exeFile.exists() || downloader.isGameInstalled()) {
             if (containerReady) {
                 statusText.text = "✓ Готово к запуску"
                 actionButton.text = "ЗАПУСТИТЬ NFS UNDERGROUND 2"
@@ -105,7 +105,6 @@ class SplashActivity : AppCompatActivity() {
     private fun startDownload() {
         actionButton.isEnabled = false
         progressBar.visibility = ProgressBar.VISIBLE
-        
         downloader.downloadGame(
             onProgress = { progress ->
                 runOnUiThread {
@@ -130,19 +129,15 @@ class SplashActivity : AppCompatActivity() {
     }
     
     private fun isRootFSInstalled(): Boolean {
-        return try {
-            RootFS.find(this) != null
-        } catch (e: Exception) {
-            false
-        }
+        return try { RootFS.find(this) != null } catch (e: Exception) { false }
     }
     
     private fun prepareContainer() {
         if (!isRootFSInstalled()) {
             Toast.makeText(this, "Первичная настройка...", Toast.LENGTH_LONG).show()
-            val intent = Intent(this, MainActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-            startActivity(intent)
+            startActivity(Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            })
             finish()
             return
         }
@@ -155,19 +150,19 @@ class SplashActivity : AppCompatActivity() {
             progressBar.visibility = ProgressBar.VISIBLE
             progressBar.isIndeterminate = true
             
-            val data = JSONObject()
-            data.put("name", "NFS Underground 2")
-            data.put("screenSize", "800x600")
-            data.put("graphicsDriver", "turnip")
-            data.put("dxwrapper", "wined3d")
-            data.put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
+            val data = JSONObject().apply {
+                put("name", "NFS Underground 2")
+                put("screenSize", "800x600")
+                put("graphicsDriver", "turnip")
+                put("dxwrapper", "wined3d")
+                put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
+            }
             
             containerManager.createContainerAsync(data, object : Callback<Container> {
                 override fun call(container: Container) {
                     runOnUiThread {
                         progressBar.visibility = ProgressBar.GONE
                         actionButton.isEnabled = true
-                        
                         if (container != null) {
                             containerReady = true
                             Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
@@ -187,38 +182,28 @@ class SplashActivity : AppCompatActivity() {
     }
     
     private fun launchGame() {
-        if (!containerReady) {
-            prepareContainer()
-            return
-        }
+        if (!containerReady) { prepareContainer(); return }
         
         try {
-            val containerManager = ContainerManager(this)
-            val container = containerManager.containers.firstOrNull()
-            
+            val container = ContainerManager(this).containers.firstOrNull()
             if (container == null) {
                 Toast.makeText(this, "Контейнер не найден", Toast.LENGTH_LONG).show()
                 containerReady = false
                 return
             }
-            
-            if (!exeOnDriveD.exists()) {
-                Toast.makeText(this, "Файл не найден\n${exeOnDriveD.absolutePath}", Toast.LENGTH_LONG).show()
+            if (!exeFile.exists()) {
+                Toast.makeText(this, "Файл не найден\n${exeFile.absolutePath}", Toast.LENGTH_LONG).show()
                 return
             }
             
-            // Запускаем как MainActivity: exec_path с Unix-путём
-            Log.d("SplashActivity", "Launching: ${exeOnDriveD.absolutePath}")
-            Log.d("SplashActivity", "Container ID: ${container.id}")
+            Log.d("SplashActivity", "Launching: ${exeFile.absolutePath}, container=${container.id}")
             
-            val intent = Intent(this, XServerDisplayActivity::class.java)
-            intent.putExtra("container_id", container.id)
-            intent.putExtra("exec_path", exeOnDriveD.absolutePath)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            
-            startActivity(intent)
+            startActivity(Intent(this, XServerDisplayActivity::class.java).apply {
+                putExtra("container_id", container.id)
+                putExtra("exec_path", exeFile.absolutePath)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
             finish()
-            
         } catch (e: Exception) {
             Log.e("SplashActivity", "Launch error", e)
             Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
