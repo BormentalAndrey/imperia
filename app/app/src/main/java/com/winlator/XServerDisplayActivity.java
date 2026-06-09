@@ -454,12 +454,57 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         else AppUtils.restartApplication(this);
     }
 
-    // ========== ИСПРАВЛЕННЫЙ МЕТОД setupWineSystemFiles С ПРИНУДИТЕЛЬНЫМ ВЫЗОВОМ ПАТЧЕЙ ==========
+    private void applyGeneralPatches(Container container) {
+        File rootDir = rootFS.getRootDir();
+        android.util.Log.d("XServerDebug", "applyGeneralPatches: rootDir = " + rootDir);
+        
+        // Проверяем, не попали ли мы в двойной rootfs, и исправляем оптимизированно
+        File suspiciousDir = new File(rootDir, "rootfs");
+        if (suspiciousDir.exists() && new File(suspiciousDir, "opt").exists()) {
+            android.util.Log.e("XServerDebug", "Found nested rootfs! Moving files...");
+            File[] files = suspiciousDir.listFiles();
+            if (files != null) {
+                for (File child : files) {
+                    File dest = new File(rootDir, child.getName());
+                    child.renameTo(dest);
+                }
+            }
+            FileUtils.delete(suspiciousDir);
+            android.util.Log.d("XServerDebug", "Fixed nested rootfs structure via rename");
+        }
+        
+        FileUtils.delete(new File(rootDir, "/opt/apps"));
+        
+        boolean patchesResult = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "rootfs_patches.tzst", rootDir);
+        android.util.Log.d("XServerDebug", "rootfs_patches.tzst extraction result: " + patchesResult);
+        
+        // Назначаем права на выполнение после распаковки
+        File wineFile = new File(rootDir, "opt/wine/bin/wine");
+        if (wineFile.exists()) {
+            android.util.Log.d("XServerDebug", "Wine found! Setting permissions...");
+            FileUtils.chmod(wineFile, 0755);
+            File wine64File = new File(rootDir, "opt/wine/bin/wine64");
+            if (wine64File.exists()) FileUtils.chmod(wine64File, 0755);
+            File wineServer = new File(rootDir, "opt/wine/bin/wineserver");
+            if (wineServer.exists()) FileUtils.chmod(wineServer, 0755);
+        } else {
+            android.util.Log.e("XServerDebug", "Wine NOT found after extraction!");
+        }
+        
+        TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "pulseaudio.tzst", new File(getFilesDir(), "pulseaudio"));
+        WineUtils.applySystemTweaks(this, wineInfo);
+        container.putExtra("graphicsDriver", null);
+        container.putExtra("dxwrapper", null);
+        container.putExtra("desktopTheme", null);
+        SettingsFragment.resetBox64Version(this);
+    }
+
     private void setupWineSystemFiles() {
         String appVersion = String.valueOf(AppUtils.getVersionCode(this));
         String rfsVersion = String.valueOf(rootFS.getVersion());
         boolean containerDataChanged = false;
 
+        // Симлинк префикса глобального окружения к контейнеру
         File globalWinePrefix = new File(rootFS.getRootDir(), RootFS.WINEPREFIX);
         if (globalWinePrefix.exists() || FileUtils.readSymlink(globalWinePrefix).length() > 0) {
             FileUtils.delete(globalWinePrefix);
@@ -469,15 +514,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         FileUtils.symlink(containerWineDir.getAbsolutePath(), globalWinePrefix.getAbsolutePath());
 
         boolean wineprefixWasUpdated = WineUtils.isWineprefixWasUpdated(container);
-        
-        // ВРЕМЕННОЕ ПРИНУДИТЕЛЬНОЕ ПРИМЕНЕНИЕ ПАТЧЕЙ ДЛЯ ТЕСТА
-        boolean forcePatches = true; // УБРАТЬ ПОСЛЕ ТЕСТА!
-        
-        if (forcePatches || !container.getExtra("appVersion").equals(appVersion) || 
-            !container.getExtra("rfsVersion").equals(rfsVersion) || 
-            wineprefixWasUpdated) {
-            
-            android.util.Log.d("XServerDebug", "Applying general patches (forcePatches=" + forcePatches + ")");
+        if (!container.getExtra("appVersion").equals(appVersion) || !container.getExtra("rfsVersion").equals(rfsVersion) || wineprefixWasUpdated) {
             applyGeneralPatches(container);
             container.putExtra("appVersion", appVersion);
             container.putExtra("rfsVersion", rfsVersion);
@@ -503,12 +540,20 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         WineStartMenuCreator.create(this, container);
         WineUtils.createDosdevicesSymlinks(container, true);
 
+        // Гарантированное монтирование D: диска
         File dosdevicesDir = new File(container.getRootDir(), ".wine/dosdevices");
+        if (!dosdevicesDir.exists()) {
+            dosdevicesDir.mkdirs();
+        }
         File dDriveSymlink = new File(dosdevicesDir, "d:");
         if (!dDriveSymlink.exists()) {
             File downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
-            FileUtils.symlink(downloadDir.getAbsolutePath(), dDriveSymlink.getAbsolutePath());
-            android.util.Log.d("XServerDebug", "Production Fallback: Forced D: drive link to " + downloadDir.getAbsolutePath());
+            File gameDir = new File(downloadDir, "nfsu2");
+            if (!gameDir.exists()) {
+                gameDir.mkdirs();
+            }
+            FileUtils.symlink(gameDir.getAbsolutePath(), dDriveSymlink.getAbsolutePath());
+            android.util.Log.d("XServerDebug", "Production Fallback: Created D: drive link to " + gameDir.getAbsolutePath());
         } else {
             android.util.Log.d("XServerDebug", "D: drive already exists, pointing to " + FileUtils.readSymlink(dDriveSymlink));
         }
@@ -1123,51 +1168,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
     }
 
-    // ========== ИСПРАВЛЕННЫЙ МЕТОД applyGeneralPatches С ЛОГИРОВАНИЕМ ==========
-    private void applyGeneralPatches(Container container) {
-        File rootDir = rootFS.getRootDir();
-        android.util.Log.d("XServerDebug", "applyGeneralPatches: rootDir = " + rootDir);
-        
-        // Проверяем существование папки назначения
-        android.util.Log.d("XServerDebug", "Destination rootDir exists: " + rootDir.exists());
-        android.util.Log.d("XServerDebug", "Destination rootDir is writable: " + rootDir.canWrite());
-        
-        FileUtils.delete(new File(rootDir, "/opt/apps"));
-        
-        boolean patchesResult = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "rootfs_patches.tzst", rootDir);
-        android.util.Log.d("XServerDebug", "rootfs_patches.tzst extraction result: " + patchesResult);
-        
-        // Проверяем результат распаковки
-        File wineFile = new File(rootDir, "opt/wine/bin/wine");
-        android.util.Log.d("XServerDebug", "Wine exists after extraction: " + wineFile.exists());
-        
-        if (wineFile.exists()) {
-            android.util.Log.d("XServerDebug", "Wine found! Setting permissions...");
-            FileUtils.chmod(wineFile, 0755);
-            File wine64File = new File(rootDir, "opt/wine/bin/wine64");
-            if (wine64File.exists()) FileUtils.chmod(wine64File, 0755);
-            File wineServer = new File(rootDir, "opt/wine/bin/wineserver");
-            if (wineServer.exists()) FileUtils.chmod(wineServer, 0755);
-        } else {
-            android.util.Log.e("XServerDebug", "Wine NOT found after extraction!");
-            // Проверяем, куда распаковалось
-            File optDir = new File(rootDir, "opt");
-            if (optDir.exists()) {
-                String[] contents = optDir.list();
-                android.util.Log.d("XServerDebug", "opt directory contains: " + (contents != null ? java.util.Arrays.toString(contents) : "null"));
-            }
-        }
-        
-        boolean pulseResult = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "pulseaudio.tzst", new File(getFilesDir(), "pulseaudio"));
-        android.util.Log.d("XServerDebug", "pulseaudio.tzst extraction result: " + pulseResult);
-        
-        WineUtils.applySystemTweaks(this, wineInfo);
-        container.putExtra("graphicsDriver", null);
-        container.putExtra("dxwrapper", null);
-        container.putExtra("desktopTheme", null);
-        SettingsFragment.resetBox64Version(this);
-    }
-
     private void changeFrameRatingVisibility(Window window, boolean visible) {
         if (frameRating == null) return;
         if (visible) {
@@ -1188,14 +1188,18 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             runOnUiThread(() -> frameRating.setVisibility(View.GONE));
         }
     }
-
+    
     public boolean verifyUserRegistry() {
         File userRegFile = new File(rootFS.getRootDir(), RootFS.WINEPREFIX+"/user.reg");
+        if (!userRegFile.exists()) return false;
+        
         String lastModified = String.valueOf(userRegFile.lastModified());
 
         if (!lastModified.equals(container.getExtra("userRegLastModified"))) {
             try (WineRegistryEditor registryEditor = new WineRegistryEditor(userRegFile)) {
                 registryEditor.removeKey("Software\\Wow6432Node\\Wine", true);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
 
             container.putExtra("userRegLastModified", lastModified);
