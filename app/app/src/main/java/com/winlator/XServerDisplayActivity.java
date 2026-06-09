@@ -454,6 +454,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         else AppUtils.restartApplication(this);
     }
 
+    // ========== ИСПРАВЛЕННЫЙ МЕТОД setupWineSystemFiles С ПРИНУДИТЕЛЬНЫМ ВЫЗОВОМ ПАТЧЕЙ ==========
     private void setupWineSystemFiles() {
         String appVersion = String.valueOf(AppUtils.getVersionCode(this));
         String rfsVersion = String.valueOf(rootFS.getVersion());
@@ -468,7 +469,15 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         FileUtils.symlink(containerWineDir.getAbsolutePath(), globalWinePrefix.getAbsolutePath());
 
         boolean wineprefixWasUpdated = WineUtils.isWineprefixWasUpdated(container);
-        if (!container.getExtra("appVersion").equals(appVersion) || !container.getExtra("rfsVersion").equals(rfsVersion) || wineprefixWasUpdated) {
+        
+        // ВРЕМЕННОЕ ПРИНУДИТЕЛЬНОЕ ПРИМЕНЕНИЕ ПАТЧЕЙ ДЛЯ ТЕСТА
+        boolean forcePatches = true; // УБРАТЬ ПОСЛЕ ТЕСТА!
+        
+        if (forcePatches || !container.getExtra("appVersion").equals(appVersion) || 
+            !container.getExtra("rfsVersion").equals(rfsVersion) || 
+            wineprefixWasUpdated) {
+            
+            android.util.Log.d("XServerDebug", "Applying general patches (forcePatches=" + forcePatches + ")");
             applyGeneralPatches(container);
             container.putExtra("appVersion", appVersion);
             container.putExtra("rfsVersion", rfsVersion);
@@ -500,6 +509,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             File downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
             FileUtils.symlink(downloadDir.getAbsolutePath(), dDriveSymlink.getAbsolutePath());
             android.util.Log.d("XServerDebug", "Production Fallback: Forced D: drive link to " + downloadDir.getAbsolutePath());
+        } else {
+            android.util.Log.d("XServerDebug", "D: drive already exists, pointing to " + FileUtils.readSymlink(dDriveSymlink));
         }
 
         String startupSelection = String.valueOf(container.getStartupSelection());
@@ -1112,11 +1123,44 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
     }
 
+    // ========== ИСПРАВЛЕННЫЙ МЕТОД applyGeneralPatches С ЛОГИРОВАНИЕМ ==========
     private void applyGeneralPatches(Container container) {
         File rootDir = rootFS.getRootDir();
+        android.util.Log.d("XServerDebug", "applyGeneralPatches: rootDir = " + rootDir);
+        
+        // Проверяем существование папки назначения
+        android.util.Log.d("XServerDebug", "Destination rootDir exists: " + rootDir.exists());
+        android.util.Log.d("XServerDebug", "Destination rootDir is writable: " + rootDir.canWrite());
+        
         FileUtils.delete(new File(rootDir, "/opt/apps"));
-        TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "rootfs_patches.tzst", rootDir);
-        TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "pulseaudio.tzst", new File(getFilesDir(), "pulseaudio"));
+        
+        boolean patchesResult = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "rootfs_patches.tzst", rootDir);
+        android.util.Log.d("XServerDebug", "rootfs_patches.tzst extraction result: " + patchesResult);
+        
+        // Проверяем результат распаковки
+        File wineFile = new File(rootDir, "opt/wine/bin/wine");
+        android.util.Log.d("XServerDebug", "Wine exists after extraction: " + wineFile.exists());
+        
+        if (wineFile.exists()) {
+            android.util.Log.d("XServerDebug", "Wine found! Setting permissions...");
+            FileUtils.chmod(wineFile, 0755);
+            File wine64File = new File(rootDir, "opt/wine/bin/wine64");
+            if (wine64File.exists()) FileUtils.chmod(wine64File, 0755);
+            File wineServer = new File(rootDir, "opt/wine/bin/wineserver");
+            if (wineServer.exists()) FileUtils.chmod(wineServer, 0755);
+        } else {
+            android.util.Log.e("XServerDebug", "Wine NOT found after extraction!");
+            // Проверяем, куда распаковалось
+            File optDir = new File(rootDir, "opt");
+            if (optDir.exists()) {
+                String[] contents = optDir.list();
+                android.util.Log.d("XServerDebug", "opt directory contains: " + (contents != null ? java.util.Arrays.toString(contents) : "null"));
+            }
+        }
+        
+        boolean pulseResult = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "pulseaudio.tzst", new File(getFilesDir(), "pulseaudio"));
+        android.util.Log.d("XServerDebug", "pulseaudio.tzst extraction result: " + pulseResult);
+        
         WineUtils.applySystemTweaks(this, wineInfo);
         container.putExtra("graphicsDriver", null);
         container.putExtra("dxwrapper", null);
