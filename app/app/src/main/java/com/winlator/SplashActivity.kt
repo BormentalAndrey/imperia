@@ -340,8 +340,7 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 
-    // ========== ИСПРАВЛЕННЫЙ МЕТОД launchGame ==========
-    // ВАЖНО: НЕ ВЫЗЫВАЕМ finish(), чтобы MIUI не убил процесс
+    // ========== ИСПРАВЛЕННЫЙ МЕТОД launchGame С ЗАПУСКОМ FOREGROUND SERVICE ==========
     private fun launchGame() {
         if (!containerReady) { 
             prepareContainer()
@@ -349,6 +348,15 @@ class SplashActivity : AppCompatActivity() {
         }
 
         try {
+            // ЗАПУСКАЕМ FOREGROUND SERVICE ДЛЯ ПРЕДОТВРАЩЕНИЯ УБИЙСТВА ПРОЦЕССА MIUI
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(Intent(this, KeepAliveService::class.java))
+                Log.d("SplashActivity", "KeepAliveService started (Android O+)")
+            } else {
+                startService(Intent(this, KeepAliveService::class.java))
+                Log.d("SplashActivity", "KeepAliveService started (legacy)")
+            }
+            
             val containerManager = ContainerManager(this)
             val container = containerManager.containers.find { it.name == "NFS Underground 2" }
                 ?: containerManager.containers.firstOrNull()
@@ -371,8 +379,6 @@ class SplashActivity : AppCompatActivity() {
             val cleanPath = gamePathOnD.replace("\\", "/")
             Log.d("SplashActivity", "Clean path for Wine: $cleanPath")
             
-            // КРИТИЧЕСКИ ВАЖНО: НЕ ВЫЗЫВАЕМ finish()!
-            // Запускаем XServerDisplayActivity и оставляем SplashActivity в фоне
             val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
                 putExtra("exec_path", cleanPath)
