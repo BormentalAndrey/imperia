@@ -18,7 +18,6 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.winlator.container.Container
 import com.winlator.container.ContainerManager
@@ -34,8 +33,10 @@ class SplashActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var statusText: TextView
     private lateinit var actionButton: Button
+    
     private var containerReady = false
     private var isPreparing = false
+    private var isGameLaunched = false // Флаг для предотвращения бесконечного цикла в onResume
 
     private val exeFile = File(Environment.getExternalStorageDirectory(), "Download/nfsu2/SPEED2.EXE")
     private val gamePathOnD = "D:\\nfsu2\\SPEED2.EXE"
@@ -49,7 +50,7 @@ class SplashActivity : AppCompatActivity() {
                 updateUI()
                 if (!containerReady && (exeFile.exists() || downloader.isGameInstalled())) {
                     prepareContainer()
-                } else if (containerReady) {
+                } else if (containerReady && !isGameLaunched) {
                     launchGame()
                 }
             } else {
@@ -65,7 +66,7 @@ class SplashActivity : AppCompatActivity() {
             updateUI()
             if (!containerReady && (exeFile.exists() || downloader.isGameInstalled())) {
                 prepareContainer()
-            } else if (containerReady) {
+            } else if (containerReady && !isGameLaunched) {
                 launchGame()
             }
         } else {
@@ -217,13 +218,19 @@ class SplashActivity : AppCompatActivity() {
     
     private fun detectGraphicsDriver(): String {
         return try {
-            val cpuInfo = File("/proc/cpuinfo").readText()
+            val hardware = Build.HARDWARE.lowercase()
+            val board = Build.BOARD.lowercase()
+            val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Build.SOC_MODEL.lowercase()
+            } else ""
+            
             when {
-                cpuInfo.contains("Qualcomm", ignoreCase = true) || 
-                cpuInfo.contains("Snapdragon", ignoreCase = true) -> "turnip"
-                cpuInfo.contains("MT", ignoreCase = true) || 
-                cpuInfo.contains("MediaTek", ignoreCase = true) -> "virgl"
-                else -> "turnip"
+                hardware.contains("qcom") || board.contains("msm") || soc.contains("snapdragon") -> "turnip"
+                hardware.contains("mt") || board.contains("mt") || soc.contains("mediatek") -> "virgl"
+                else -> {
+                    val cpuInfo = try { File("/proc/cpuinfo").readText().lowercase() } catch (e: Exception) { "" }
+                    if (cpuInfo.contains("mediatek") || cpuInfo.contains("mt")) "virgl" else "turnip"
+                }
             }
         } catch (e: Exception) {
             "turnip"
@@ -254,7 +261,7 @@ class SplashActivity : AppCompatActivity() {
             containerReady = true
             isPreparing = false
             updateUI()
-            launchGame()
+            if (!isGameLaunched) launchGame()
             return
         }
 
@@ -290,7 +297,7 @@ class SplashActivity : AppCompatActivity() {
                             containerReady = true
                             Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
                             updateUI()
-                            launchGame()
+                            if (!isGameLaunched) launchGame()
                         } else {
                             statusText.text = "Ошибка создания контейнера"
                         }
@@ -340,7 +347,6 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 
-    // ========== ИСПРАВЛЕННЫЙ МЕТОД launchGame С ЗАПУСКОМ FOREGROUND SERVICE ==========
     private fun launchGame() {
         if (!containerReady) { 
             prepareContainer()
@@ -348,7 +354,6 @@ class SplashActivity : AppCompatActivity() {
         }
 
         try {
-            // ЗАПУСКАЕМ FOREGROUND SERVICE ДЛЯ ПРЕДОТВРАЩЕНИЯ УБИЙСТВА ПРОЦЕССА MIUI
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(Intent(this, KeepAliveService::class.java))
                 Log.d("SplashActivity", "KeepAliveService started (Android O+)")
@@ -386,7 +391,7 @@ class SplashActivity : AppCompatActivity() {
             }
             startActivity(intent)
             
-            // Перемещаем SplashActivity в фон вместо завершения
+            isGameLaunched = true 
             moveTaskToBack(true)
             
             Log.d("SplashActivity", "XServerDisplayActivity started, SplashActivity preserved in background")
@@ -394,6 +399,7 @@ class SplashActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e("SplashActivity", "Ошибка запуска", e)
             Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
+            isGameLaunched = false
         }
     }
 
@@ -401,7 +407,11 @@ class SplashActivity : AppCompatActivity() {
         super.onResume()
         Log.d("SplashActivity", "onResume called, containerReady=$containerReady, isPreparing=$isPreparing")
         
-        // Проверяем разрешения и автоматически продолжаем
+        if (isGameLaunched) {
+            Log.d("SplashActivity", "Game already launched, skipping auto-start to prevent loop")
+            return
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (Environment.isExternalStorageManager()) {
                 if (!containerReady && !isPreparing && (exeFile.exists() || downloader.isGameInstalled())) {
