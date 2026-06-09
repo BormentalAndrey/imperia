@@ -83,6 +83,16 @@ class SplashActivity : AppCompatActivity() {
         logDebugInfo()
     }
     
+    override fun onStop() {
+        super.onStop()
+        Log.d("SplashActivity", "onStop called - Activity stopped but not destroyed")
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d("SplashActivity", "onDestroy called")
+    }
+    
     private fun logDebugInfo() {
         Log.d("SplashActivity", "=== NFS Underground 2 Launcher ===")
         Log.d("SplashActivity", "Путь к игре: ${exeFile.absolutePath}")
@@ -292,7 +302,6 @@ class SplashActivity : AppCompatActivity() {
         })
     }
     
-    // ИСПРАВЛЕННЫЙ МЕТОД: с экранированием обратных слешей
     private fun createDesktopFile(container: Container): File? {
         return try {
             val desktopDir = File(container.rootDir, "desktop_files")
@@ -302,7 +311,6 @@ class SplashActivity : AppCompatActivity() {
             
             val desktopFile = File(desktopDir, "nfs_underground_2.desktop")
             
-            // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: заменяем \ на \\ для экранирования
             val escapedPath = gamePathOnD.replace("\\", "\\\\")
             val escapedWorkingDir = workingDir.replace("\\", "\\\\")
             
@@ -324,7 +332,6 @@ class SplashActivity : AppCompatActivity() {
             desktopFile.writeText(desktopContent)
             Log.d("SplashActivity", "Desktop file created: ${desktopFile.absolutePath}")
             Log.d("SplashActivity", "Escaped path: $escapedPath")
-            Log.d("SplashActivity", "Content:\n$desktopContent")
             
             desktopFile
         } catch (e: Exception) {
@@ -333,6 +340,8 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 
+    // ========== ИСПРАВЛЕННЫЙ МЕТОД launchGame ==========
+    // ВАЖНО: НЕ ВЫЗЫВАЕМ finish(), чтобы MIUI не убил процесс
     private fun launchGame() {
         if (!containerReady) { 
             prepareContainer()
@@ -359,17 +368,23 @@ class SplashActivity : AppCompatActivity() {
             Log.d("SplashActivity", "Контейнер: ${container.id}")
             Log.d("SplashActivity", "Путь в Windows: $gamePathOnD")
             
-            // ИСПРАВЛЕНИЕ: используем exec_path с прямыми слешами (надежнее)
-            // Wine отлично понимает пути с / вместо \
             val cleanPath = gamePathOnD.replace("\\", "/")
             Log.d("SplashActivity", "Clean path for Wine: $cleanPath")
             
-            startActivity(Intent(this, XServerDisplayActivity::class.java).apply {
+            // КРИТИЧЕСКИ ВАЖНО: НЕ ВЫЗЫВАЕМ finish()!
+            // Запускаем XServerDisplayActivity и оставляем SplashActivity в фоне
+            val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
                 putExtra("exec_path", cleanPath)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
-            finish()
+            }
+            startActivity(intent)
+            
+            // Перемещаем SplashActivity в фон вместо завершения
+            moveTaskToBack(true)
+            
+            Log.d("SplashActivity", "XServerDisplayActivity started, SplashActivity preserved in background")
+            
         } catch (e: Exception) {
             Log.e("SplashActivity", "Ошибка запуска", e)
             Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
@@ -378,12 +393,31 @@ class SplashActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        Log.d("SplashActivity", "onResume called, containerReady=$containerReady")
+        Log.d("SplashActivity", "onResume called, containerReady=$containerReady, isPreparing=$isPreparing")
+        
+        // Проверяем разрешения и автоматически продолжаем
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (Environment.isExternalStorageManager() && !containerReady && !isPreparing && (exeFile.exists() || downloader.isGameInstalled())) {
+            if (Environment.isExternalStorageManager()) {
+                if (!containerReady && !isPreparing && (exeFile.exists() || downloader.isGameInstalled())) {
+                    Log.d("SplashActivity", "Auto-starting prepareContainer from onResume")
+                    prepareContainer()
+                } else if (containerReady) {
+                    Log.d("SplashActivity", "Auto-starting launchGame from onResume")
+                    launchGame()
+                } else {
+                    updateUI()
+                }
+            } else {
+                Log.d("SplashActivity", "Permission not granted yet")
+                updateUI()
+            }
+        } else {
+            if (!containerReady && !isPreparing && (exeFile.exists() || downloader.isGameInstalled())) {
                 prepareContainer()
             } else if (containerReady) {
                 launchGame()
+            } else {
+                updateUI()
             }
         }
     }
