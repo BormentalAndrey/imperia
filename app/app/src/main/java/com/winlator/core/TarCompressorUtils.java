@@ -157,7 +157,7 @@ public abstract class TarCompressorUtils {
         }
     }
 
-    // ИСПРАВЛЕННЫЙ МЕТОД extract с правильным управлением потоками
+    // ИСПРАВЛЕННЫЙ МЕТОД extract с правильной обработкой символических ссылок
     private static boolean extract(Type type, InputStream source, File destination, OnExtractFileListener onExtractFileListener) {
         if (source == null) {
             Log.e(TAG, "Source stream is null");
@@ -195,25 +195,43 @@ public abstract class TarCompressorUtils {
                 }
 
                 if (entry.isDirectory()) {
-                    if (!file.isDirectory()) file.mkdirs();
+                    if (!file.isDirectory()) {
+                        file.mkdirs();
+                        Log.d(TAG, "Created directory: " + file.getAbsolutePath());
+                    }
                 }
+                // ========== ИСПРАВЛЕНИЕ: ПРАВИЛЬНАЯ ОБРАБОТКА СИМВОЛИЧЕСКИХ ССЫЛОК ==========
+                else if (entry.isSymbolicLink()) {
+                    File parentDir = file.getParentFile();
+                    if (parentDir != null && !parentDir.exists()) {
+                        parentDir.mkdirs();
+                    }
+                    // Удаляем существующий файл/ссылку, если она есть
+                    if (file.exists()) {
+                        file.delete();
+                    }
+                    try {
+                        android.system.Os.symlink(entry.getLinkName(), file.getAbsolutePath());
+                        Log.d(TAG, "Created symlink: " + entry.getName() + " -> " + entry.getLinkName());
+                    } catch (android.system.ErrnoException e) {
+                        Log.e(TAG, "Failed to create symlink: " + entry.getName() + " -> " + entry.getLinkName(), e);
+                        return false;
+                    }
+                }
+                // ========== КОНЕЦ ИСПРАВЛЕНИЯ ==========
                 else {
                     File parentDir = file.getParentFile();
                     if (parentDir != null && !parentDir.exists()) {
                         parentDir.mkdirs();
                     }
                     
-                    if (entry.isSymbolicLink()) {
-                        FileUtils.symlink(entry.getLinkName(), file.getAbsolutePath());
-                    }
-                    else {
-                        try (BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(file), StreamUtils.BUFFER_SIZE)) {
-                            if (!StreamUtils.copy(tar, outStream)) {
-                                Log.e(TAG, "Failed to copy entry: " + entry.getName());
-                                return false;
-                            }
+                    try (BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(file), StreamUtils.BUFFER_SIZE)) {
+                        if (!StreamUtils.copy(tar, outStream)) {
+                            Log.e(TAG, "Failed to copy entry: " + entry.getName());
+                            return false;
                         }
                     }
+                    Log.d(TAG, "Extracted file: " + entry.getName() + " (" + entry.getSize() + " bytes)");
                 }
 
                 FileUtils.chmod(file, 0771);
