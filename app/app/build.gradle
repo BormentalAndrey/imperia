@@ -67,6 +67,20 @@ android {
         }
         pickFirst 'lib/arm64-v8a/libc++_shared.so'
     }
+    
+    // ========== ДОБАВЛЕНО: НАСТРОЙКА ASSETS ==========
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets']
+        }
+    }
+    
+    // ========== ВАЖНО: НЕ СЖИМАТЬ TZST ФАЙЛЫ ==========
+    aaptOptions {
+        noCompress 'tzst'
+        noCompress 'zst'
+    }
+    // =================================================
 }
 
 dependencies {
