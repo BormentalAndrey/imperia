@@ -2,6 +2,7 @@ package com.winlator.core;
 
 import android.content.Context;
 import android.net.Uri;
+import android.util.Log;
 
 import org.apache.commons.compress.archivers.ArchiveInputStream;
 import org.apache.commons.compress.archivers.ArchiveOutputStream;
@@ -27,6 +28,8 @@ import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicLong;
 
 public abstract class TarCompressorUtils {
+    private static final String TAG = "TarCompressorUtils";
+    
     public enum Type {XZ, ZSTD}
 
     public interface OnExtractFileListener {
@@ -110,9 +113,11 @@ public abstract class TarCompressorUtils {
 
     public static boolean extract(Type type, Context context, String assetFile, File destination, OnExtractFileListener onExtractFileListener) {
         try {
+            Log.d(TAG, "Extracting from assets: " + assetFile + " to " + destination);
             return extract(type, context.getAssets().open(assetFile), destination, onExtractFileListener);
         }
         catch (IOException e) {
+            Log.e(TAG, "Failed to open asset file: " + assetFile, e);
             return false;
         }
     }
@@ -124,9 +129,11 @@ public abstract class TarCompressorUtils {
     public static boolean extract(Type type, Context context, Uri source, File destination, OnExtractFileListener onExtractFileListener) {
         if (source == null) return false;
         try {
+            Log.d(TAG, "Extracting from URI: " + source + " to " + destination);
             return extract(type, context.getContentResolver().openInputStream(source), destination, onExtractFileListener);
         }
         catch (FileNotFoundException e) {
+            Log.e(TAG, "File not found: " + source, e);
             return false;
         }
     }
@@ -136,23 +143,51 @@ public abstract class TarCompressorUtils {
     }
 
     public static boolean extract(Type type, File source, File destination, OnExtractFileListener onExtractFileListener) {
-        if (source == null || !source.isFile()) return false;
+        if (source == null || !source.isFile()) {
+            Log.e(TAG, "Source file is null or does not exist: " + source);
+            return false;
+        }
         try {
+            Log.d(TAG, "Extracting from file: " + source + " to " + destination);
             return extract(type, new BufferedInputStream(new FileInputStream(source), StreamUtils.BUFFER_SIZE), destination, onExtractFileListener);
         }
         catch (FileNotFoundException e) {
+            Log.e(TAG, "File not found: " + source, e);
             return false;
         }
     }
 
+    // ИСПРАВЛЕННЫЙ МЕТОД extract с правильным управлением потоками
     private static boolean extract(Type type, InputStream source, File destination, OnExtractFileListener onExtractFileListener) {
-        if (source == null) return false;
-        try (InputStream inStream = getCompressorInputStream(type, source);
-             ArchiveInputStream tar = new TarArchiveInputStream(inStream)) {
+        if (source == null) {
+            Log.e(TAG, "Source stream is null");
+            return false;
+        }
+        
+        InputStream decompressorStream = null;
+        ArchiveInputStream tar = null;
+        
+        try {
+            decompressorStream = getCompressorInputStream(type, source);
+            if (decompressorStream == null) {
+                Log.e(TAG, "Failed to create compressor input stream for type: " + type);
+                return false;
+            }
+            
+            tar = new TarArchiveInputStream(decompressorStream);
+            
             TarArchiveEntry entry;
+            int entryCount = 0;
+            
             while ((entry = (TarArchiveEntry)tar.getNextEntry()) != null) {
                 if (!tar.canReadEntryData(entry)) continue;
+                
                 File file = new File(destination, entry.getName());
+                entryCount++;
+                
+                if (entryCount % 100 == 0) {
+                    Log.d(TAG, "Extracted " + entryCount + " files...");
+                }
 
                 if (onExtractFileListener != null) {
                     file = onExtractFileListener.onExtractFile(file, entry.getSize());
@@ -163,22 +198,40 @@ public abstract class TarCompressorUtils {
                     if (!file.isDirectory()) file.mkdirs();
                 }
                 else {
+                    File parentDir = file.getParentFile();
+                    if (parentDir != null && !parentDir.exists()) {
+                        parentDir.mkdirs();
+                    }
+                    
                     if (entry.isSymbolicLink()) {
                         FileUtils.symlink(entry.getLinkName(), file.getAbsolutePath());
                     }
                     else {
                         try (BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(file), StreamUtils.BUFFER_SIZE)) {
-                            if (!StreamUtils.copy(tar, outStream)) return false;
+                            if (!StreamUtils.copy(tar, outStream)) {
+                                Log.e(TAG, "Failed to copy entry: " + entry.getName());
+                                return false;
+                            }
                         }
                     }
                 }
 
                 FileUtils.chmod(file, 0771);
             }
+            
+            Log.d(TAG, "Successfully extracted " + entryCount + " files to " + destination);
             return true;
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
+            Log.e(TAG, "Extraction failed", e);
             return false;
+        } finally {
+            try {
+                if (tar != null) tar.close();
+                if (decompressorStream != null) decompressorStream.close();
+                if (source != null) source.close();
+            } catch (IOException e) {
+                Log.e(TAG, "Failed to close streams", e);
+            }
         }
     }
 
@@ -223,17 +276,21 @@ public abstract class TarCompressorUtils {
             return null;
         }
         catch (IOException e) {
+            Log.e(TAG, "Failed to read from archive", e);
             return null;
         }
     }
 
     private static InputStream getCompressorInputStream(Type type, InputStream source) throws IOException {
         if (type == Type.XZ) {
+            Log.d(TAG, "Creating XZ compressor input stream");
             return new XZCompressorInputStream(source);
         }
         else if (type == Type.ZSTD) {
+            Log.d(TAG, "Creating ZSTD compressor input stream");
             return new ZstdCompressorInputStream(source);
         }
+        Log.e(TAG, "Unknown compressor type: " + type);
         return null;
     }
 
