@@ -20,6 +20,7 @@
     
     <!-- Для Foreground Service (предотвращение убийства процесса MIUI) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     
     <!-- Для Bluetooth геймпада -->
@@ -38,7 +39,7 @@
         android:requestLegacyExternalStorage="true"
         android:usesCleartextTraffic="true">
 
-        <!-- ИСПРАВЛЕНА: SplashActivity с launchMode и configChanges -->
+        <!-- SplashActivity с launchMode и configChanges -->
         <activity 
             android:name="com.winlator.SplashActivity"
             android:theme="@style/AppThemeDark"
@@ -90,7 +91,11 @@
             android:name="com.winlator.KeepAliveService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.foreground_service_type_special_use_description"
+                android:value="@string/foreground_service_description" />
+        </service>
 
         <!-- File Provider для доступа к файлам -->
         <provider
