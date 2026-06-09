@@ -499,6 +499,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         SettingsFragment.resetBox64Version(this);
     }
 
+    // ========== ИСПРАВЛЕННЫЙ МЕТОД setupWineSystemFiles С ПРИНУДИТЕЛЬНЫМ ВЫЗОВОМ ПАТЧЕЙ ==========
     private void setupWineSystemFiles() {
         String appVersion = String.valueOf(AppUtils.getVersionCode(this));
         String rfsVersion = String.valueOf(rootFS.getVersion());
@@ -514,7 +515,15 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         FileUtils.symlink(containerWineDir.getAbsolutePath(), globalWinePrefix.getAbsolutePath());
 
         boolean wineprefixWasUpdated = WineUtils.isWineprefixWasUpdated(container);
-        if (!container.getExtra("appVersion").equals(appVersion) || !container.getExtra("rfsVersion").equals(rfsVersion) || wineprefixWasUpdated) {
+        
+        // ВРЕМЕННОЕ ПРИНУДИТЕЛЬНОЕ ПРИМЕНЕНИЕ ПАТЧЕЙ ДЛЯ ТЕСТА (УБРАТЬ ПОСЛЕ ТОГО, КАК WINE ПОЯВИТСЯ)
+        boolean forcePatches = true; // <-- ВАЖНО! УБРАТЬ ПОСЛЕ УСПЕШНОГО ЗАПУСКА
+        
+        if (forcePatches || !container.getExtra("appVersion").equals(appVersion) || 
+            !container.getExtra("rfsVersion").equals(rfsVersion) || 
+            wineprefixWasUpdated) {
+            
+            android.util.Log.d("XServerDebug", "Applying general patches (forcePatches=" + forcePatches + ")");
             applyGeneralPatches(container);
             container.putExtra("appVersion", appVersion);
             container.putExtra("rfsVersion", rfsVersion);
