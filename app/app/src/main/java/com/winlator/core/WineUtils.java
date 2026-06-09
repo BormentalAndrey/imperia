@@ -220,17 +220,34 @@ public abstract class WineUtils {
         environment.startEnvironmentComponents();
     }
 
+    // ИСПРАВЛЕННЫЙ МЕТОД: защита от null и битых ссылок
     public static boolean isWineprefixWasUpdated(Container container) {
+        if (container == null) return false;
+        
         File file = new File(container.getRootDir(), "/.wine/.update-timestamp");
+        
+        // Проверяем, существует ли файл и не является ли он символической ссылкой
+        if (!file.exists() || FileUtils.isSymlink(file)) {
+            return false;
+        }
+        
         String content = FileUtils.readString(file);
+        if (content == null || content.isEmpty()) {
+            return false;
+        }
         
         if (!content.startsWith("disable")) {
             content = content.replaceAll("[\r\n]+", "");
             try {
                 int updateTimestamp = Integer.parseInt(content);
-                if (updateTimestamp != 0) return FileUtils.writeString(file, "disable\n");
+                if (updateTimestamp != 0) {
+                    return FileUtils.writeString(file, "disable\n");
+                }
             }
-            catch (NumberFormatException e) {}
+            catch (NumberFormatException e) {
+                // Не число — просто возвращаем false
+                return false;
+            }
         }
         return false;
     }
