@@ -167,7 +167,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             ContainerManager containerManager = new ContainerManager(this);
             container = containerManager.getContainerById(getIntent().getIntExtra("container_id", 0));
 
-            // DEBUG LOGS FOR LAUNCH PARAMS
             String shortcutPath = getIntent().getStringExtra("shortcut_path");
             String execPathDebug = getIntent().getStringExtra("exec_path");
             android.util.Log.d("XServerDebug", "Received shortcut_path: " + shortcutPath);
@@ -234,7 +233,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                     String execPathStr = intent.getStringExtra("exec_path");
                     String appName = "";
                     if (execPathStr != null) {
-                        // FIX: extract name correctly from DOS paths
                         if (execPathStr.contains("\\")) {
                             appName = execPathStr.substring(execPathStr.lastIndexOf("\\") + 1);
                         } else {
@@ -461,6 +459,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         String rfsVersion = String.valueOf(rootFS.getVersion());
         boolean containerDataChanged = false;
 
+        File globalWinePrefix = new File(rootFS.getRootDir(), RootFS.WINEPREFIX);
+        if (globalWinePrefix.exists() || FileUtils.readSymlink(globalWinePrefix).length() > 0) {
+            FileUtils.delete(globalWinePrefix);
+        }
+        File containerWineDir = new File(container.getRootDir(), ".wine");
+        if (!containerWineDir.exists()) containerWineDir.mkdirs();
+        FileUtils.symlink(containerWineDir.getAbsolutePath(), globalWinePrefix.getAbsolutePath());
+
         boolean wineprefixWasUpdated = WineUtils.isWineprefixWasUpdated(container);
         if (!container.getExtra("appVersion").equals(appVersion) || !container.getExtra("rfsVersion").equals(rfsVersion) || wineprefixWasUpdated) {
             applyGeneralPatches(container);
@@ -487,6 +493,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         WineStartMenuCreator.create(this, container);
         WineUtils.createDosdevicesSymlinks(container, true);
+
+        File dosdevicesDir = new File(container.getRootDir(), ".wine/dosdevices");
+        File dDriveSymlink = new File(dosdevicesDir, "d:");
+        if (!dDriveSymlink.exists()) {
+            File downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS);
+            FileUtils.symlink(downloadDir.getAbsolutePath(), dDriveSymlink.getAbsolutePath());
+            android.util.Log.d("XServerDebug", "Production Fallback: Forced D: drive link to " + downloadDir.getAbsolutePath());
+        }
 
         String startupSelection = String.valueOf(container.getStartupSelection());
         if (!startupSelection.equals(container.getExtra("startupSelection")) || wineprefixWasUpdated) {
@@ -940,7 +954,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         File wineSystem32Dir = new File(wineDir, "/lib/wine/x86_64-windows");
         File wineSysWoW64Dir = new File(wineDir, "/lib/wine/i386-windows");
         File containerSystem32Dir = new File(rootDir, RootFS.WINEPREFIX+"/drive_c/windows/system32");
-        File containerSysWoW64Dir = new File(rootDir, RootFS.WINEPREFIX+"/drive_c/windows/syswow64");;
+        File containerSysWoW64Dir = new File(rootDir, RootFS.WINEPREFIX+"/drive_c/windows/syswow64");
 
         for (String dll : dlls) {
             FileUtils.copy(new File(wineSysWoW64Dir, dll), new File(containerSysWoW64Dir, dll));
@@ -952,7 +966,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return getIntent().getBooleanExtra("generate_wineprefix", false);
     }
 
-    // ========== ИСПРАВЛЕННЫЙ МЕТОД getWineStartCommand() ==========
     private String getWineStartCommand() {
         String cmdArgs = "";
         String execPath = null;
@@ -988,11 +1001,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         if (execPath != null) {
-            // ИСПРАВЛЕНИЕ: разделяем путь на директорию и имя файла для winhandler.exe
             String cleanPath = execPath.replace("\\", "/");
             android.util.Log.d("XServerDebug", "Cleaned path: " + cleanPath);
             
-            // Находим последний слеш для разделения
             int lastSlash = cleanPath.lastIndexOf('/');
             String execDir;
             String filename;
@@ -1005,7 +1016,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 filename = cleanPath;
             }
             
-            // Формат для winhandler.exe: /dir "D:/nfsu2" "SPEED2.EXE"
             cmdArgs = "/dir \"" + execDir + "\" \"" + filename + "\"" + execArgs;
             android.util.Log.d("XServerDebug", "Winhandler args: " + cmdArgs);
         }
@@ -1019,7 +1029,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             overrideEnvVars.remove("EXTRA_EXEC_ARGS");
         }
         
-        String fullCommand = "C:\\windows\\winhandler.exe " + cmdArgs;
+        String fullCommand = "\"C:/windows/winhandler.exe\" " + cmdArgs;
         android.util.Log.d("XServerDebug", "Full command: " + fullCommand);
         return fullCommand;
     }
