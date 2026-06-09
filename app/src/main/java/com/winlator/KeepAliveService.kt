@@ -1,6 +1,5 @@
 package com.winlator
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -12,15 +11,27 @@ import androidx.core.app.NotificationCompat
 class KeepAliveService : Service() {
     
     companion object {
-        const val CHANNEL_ID = "winlator_keepalive"
-        const val NOTIFICATION_ID = 1001
+        private const val NOTIFICATION_ID = 1001
+        private const val CHANNEL_ID = "winlator_keepalive_channel"
     }
     
     override fun onBind(intent: Intent?): IBinder? = null
     
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onCreate() {
+        super.onCreate()
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification())
+    }
+    
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("NFS Underground 2")
+            .setContentText("Запуск игры...")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .build()
+        
+        startForeground(NOTIFICATION_ID, notification)
         return START_NOT_STICKY
     }
     
@@ -39,13 +50,8 @@ class KeepAliveService : Service() {
         }
     }
     
-    private fun createNotification(): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("NFS Underground 2")
-            .setContentText("Запуск игры...")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(true)
-            .build()
+    override fun onDestroy() {
+        super.onDestroy()
+        stopForeground(true)
     }
 }
