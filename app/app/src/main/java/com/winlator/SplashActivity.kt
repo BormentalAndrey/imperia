@@ -23,8 +23,10 @@ import com.winlator.container.Container
 import com.winlator.container.ContainerManager
 import com.winlator.core.Callback
 import com.winlator.xenvironment.RootFS
+import com.winlator.xenvironment.RootFSInstaller
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
 
 @SuppressLint("SetTextI18n")
 class SplashActivity : AppCompatActivity() {
@@ -36,7 +38,7 @@ class SplashActivity : AppCompatActivity() {
     
     private var containerReady = false
     private var isPreparing = false
-    private var isGameLaunched = false // Флаг для предотвращения бесконечного цикла в onResume
+    private var isGameLaunched = false
 
     private val exeFile = File(Environment.getExternalStorageDirectory(), "Download/nfsu2/SPEED2.EXE")
     private val gamePathOnD = "D:\\nfsu2\\SPEED2.EXE"
@@ -82,6 +84,9 @@ class SplashActivity : AppCompatActivity() {
         checkStoragePermissions()
         updateUI()
         logDebugInfo()
+        
+        // КРИТИЧЕСКИ ВАЖНО: Устанавливаем RootFS (копируем файлы из assets)
+        installRootFSIfNeeded()
     }
     
     override fun onStop() {
@@ -210,6 +215,18 @@ class SplashActivity : AppCompatActivity() {
                 }
             }
         )
+    }
+
+    // ========== НОВЫЙ МЕТОД: Установка RootFS ==========
+    private fun installRootFSIfNeeded() {
+        try {
+            Log.d("SplashActivity", "Checking RootFS installation...")
+            val rootFSInstaller = RootFSInstaller(this)
+            rootFSInstaller.installIfNeeded()
+            Log.d("SplashActivity", "RootFS installation check completed")
+        } catch (e: Exception) {
+            Log.e("SplashActivity", "Failed to install RootFS", e)
+        }
     }
 
     private fun isRootFSInstalled(): Boolean {
