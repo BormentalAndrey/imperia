@@ -2,6 +2,7 @@ package com.winlator.container;
 
 import android.content.Context;
 import android.os.Handler;
+import android.util.Log;
 
 import com.winlator.R;
 import com.winlator.core.Callback;
@@ -20,6 +21,8 @@ import java.util.Collections;
 import java.util.concurrent.Executors;
 
 public class ContainerManager {
+    private static final String TAG = "ContainerManager";
+    
     private final ArrayList<Container> containers = new ArrayList<>();
     private int maxContainerId = 0;
     private final File homeDir;
@@ -61,7 +64,9 @@ public class ContainerManager {
                 }
             }
         }
-        catch (JSONException e) {}
+        catch (JSONException e) {
+            Log.e(TAG, "Failed to load containers", e);
+        }
     }
 
     public void activateContainer(Container container) {
@@ -69,6 +74,7 @@ public class ContainerManager {
         File file = new File(homeDir, RootFS.USER);
         file.delete();
         FileUtils.symlink(RootFS.USER+"-"+container.id, file.getPath());
+        Log.d(TAG, "Activated container: " + container.id);
     }
 
     public void createContainerAsync(final JSONObject data, Callback<Container> callback) {
@@ -99,9 +105,14 @@ public class ContainerManager {
         try {
             int id = maxContainerId + 1;
             data.put("id", id);
+            
+            Log.d(TAG, "Creating container with ID: " + id);
 
             File containerDir = new File(homeDir, RootFS.USER+"-"+id);
-            if (!containerDir.mkdirs()) return null;
+            if (!containerDir.mkdirs()) {
+                Log.e(TAG, "Failed to create container directory: " + containerDir);
+                return null;
+            }
 
             Container container = new Container(id);
             container.setRootDir(containerDir);
@@ -110,18 +121,55 @@ public class ContainerManager {
             boolean isMainWineVersion = !data.has("wineVersion") || WineInfo.isMainWineVersion(data.getString("wineVersion"));
             if (!isMainWineVersion) container.setWineVersion(data.getString("wineVersion"));
 
+            Log.d(TAG, "Extracting container pattern file...");
             if (!extractContainerPatternFile(container.getWineVersion(), containerDir)) {
+                Log.e(TAG, "Failed to extract container pattern file");
                 FileUtils.delete(containerDir);
                 return null;
             }
+            
+            Log.d(TAG, "Container pattern extracted successfully");
+            
+            // Создаем символические ссылки для дисков
+            setupDrivesSymlinks(container);
 
             container.saveData();
             maxContainerId++;
             containers.add(container);
+            Log.d(TAG, "Container created successfully with ID: " + id);
             return container;
         }
-        catch (JSONException e) {}
-        return null;
+        catch (JSONException e) {
+            Log.e(TAG, "JSON error while creating container", e);
+            return null;
+        }
+    }
+    
+    private void setupDrivesSymlinks(Container container) {
+        try {
+            File dosdevicesDir = new File(container.getRootDir(), ".wine/dosdevices");
+            if (!dosdevicesDir.exists()) {
+                dosdevicesDir.mkdirs();
+            }
+            
+            // Создаем символические ссылки для всех дисков
+            for (Drive drive : container.drivesIterator()) {
+                String driveLetter = drive.letter.toLowerCase();
+                File driveLink = new File(dosdevicesDir, driveLetter + ":");
+                File driveTarget = new File(drive.path);
+                
+                if (!driveLink.exists()) {
+                    if (driveTarget.exists() || driveTarget.mkdirs()) {
+                        FileUtils.symlink(driveTarget.getAbsolutePath(), driveLink.getAbsolutePath());
+                        Log.d(TAG, "Created drive " + driveLetter + ": symlink to " + drive.path);
+                    } else {
+                        Log.w(TAG, "Failed to create drive " + driveLetter + ": target path does not exist");
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to setup drives symlinks", e);
+        }
     }
 
     private void duplicateContainer(Container srcContainer) {
@@ -244,28 +292,45 @@ public class ContainerManager {
         }
     }
 
+    // ИСПРАВЛЕННЫЙ МЕТОД с логированием
     private boolean extractContainerPatternFile(String wineVersion, File containerDir) {
+        Log.d(TAG, "Extracting container pattern for wine version: " + wineVersion);
+        
         if (WineInfo.isMainWineVersion(wineVersion)) {
+            Log.d(TAG, "Using main wine version, extracting container_pattern.tzst from assets");
             boolean result = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, context, "container_pattern.tzst", containerDir);
-
-            if (result) {
-                try {
-                    JSONObject commonDlls = new JSONObject(FileUtils.readString(context, "common_dlls.json"));
-                    copyCommonDlls("x86_64-windows", "system32", commonDlls, containerDir);
-                    copyCommonDlls("i386-windows", "syswow64", commonDlls, containerDir);
-                }
-                catch (JSONException e) {
-                    return false;
-                }
+            
+            if (!result) {
+                Log.e(TAG, "FAILED to extract container_pattern.tzst from assets!");
+                return false;
+            }
+            
+            Log.d(TAG, "Successfully extracted container_pattern.tzst");
+            
+            try {
+                JSONObject commonDlls = new JSONObject(FileUtils.readString(context, "common_dlls.json"));
+                copyCommonDlls("x86_64-windows", "system32", commonDlls, containerDir);
+                copyCommonDlls("i386-windows", "syswow64", commonDlls, containerDir);
+                Log.d(TAG, "Successfully copied common DLLs");
+            }
+            catch (JSONException e) {
+                Log.e(TAG, "Failed to copy common DLLs", e);
+                return false;
             }
 
-            return result;
+            return true;
         }
         else {
             File installedWineDir = RootFS.find(context).getInstalledWineDir();
             WineInfo wineInfo = WineInfo.fromIdentifier(context, wineVersion);
             File file = new File(installedWineDir, "container-pattern-"+wineInfo.fullVersion()+".tzst");
-            return TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, file, containerDir);
+            Log.d(TAG, "Using custom wine version, extracting from: " + file.getAbsolutePath());
+            boolean result = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, file, containerDir);
+            
+            if (!result) {
+                Log.e(TAG, "FAILED to extract custom container pattern from: " + file.getAbsolutePath());
+            }
+            return result;
         }
     }
 }
