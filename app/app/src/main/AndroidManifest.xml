@@ -7,6 +7,7 @@
         android:glEsVersion="0x00020000"
         android:required="true" />
 
+    <!-- Основные разрешения -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
@@ -16,6 +17,16 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
+    
+    <!-- Для Foreground Service (предотвращение убийства процесса MIUI) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    
+    <!-- Для Bluetooth геймпада -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
 
     <application
         android:icon="@mipmap/ic_launcher"
@@ -24,11 +35,16 @@
         android:extractNativeLibs="true"
         android:allowAudioPlaybackCapture="true"
         android:label="NFS Underground 2"
-        android:requestLegacyExternalStorage="true">
+        android:requestLegacyExternalStorage="true"
+        android:usesCleartextTraffic="true">
 
-        <activity android:name="com.winlator.SplashActivity"
+        <!-- ИСПРАВЛЕНА: SplashActivity с launchMode и configChanges -->
+        <activity 
+            android:name="com.winlator.SplashActivity"
             android:theme="@style/AppThemeDark"
             android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation"
             android:screenOrientation="sensor">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -36,13 +52,18 @@
             </intent-filter>
         </activity>
 
-        <activity android:name="com.winlator.MainActivity"
+        <!-- MainActivity с расширенными configChanges -->
+        <activity 
+            android:name="com.winlator.MainActivity"
             android:theme="@style/AppThemeDark"
             android:exported="false"
+            android:launchMode="singleTask"
             android:screenOrientation="sensor"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation" />
 
-        <activity android:name="com.winlator.XServerDisplayActivity"
+        <!-- XServerDisplayActivity с правильными настройками -->
+        <activity 
+            android:name="com.winlator.XServerDisplayActivity"
             android:exported="false"
             android:theme="@style/AppThemeFullscreenDark"
             android:supportsPictureInPicture="true"
@@ -50,16 +71,28 @@
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation"
             android:screenOrientation="sensorLandscape" />
 
-        <activity android:name="com.winlator.ControlsEditorActivity"
+        <activity 
+            android:name="com.winlator.ControlsEditorActivity"
             android:exported="false"
             android:theme="@style/AppThemeFullscreenDark"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation"
             android:screenOrientation="sensorLandscape" />
 
-        <activity android:name="com.winlator.ExternalControllerBindingsActivity"
+        <activity 
+            android:name="com.winlator.ExternalControllerBindingsActivity"
             android:theme="@style/AppThemeDark"
             android:exported="false"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation"
             android:screenOrientation="sensor" />
 
+        <!-- Foreground Service для предотвращения убийства процесса MIUI -->
+        <service
+            android:name="com.winlator.KeepAliveService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- File Provider для доступа к файлам -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.winlator.FileProvider"
@@ -69,5 +102,7 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"/>
         </provider>
+
     </application>
+
 </manifest>
