@@ -157,7 +157,6 @@ public abstract class TarCompressorUtils {
         }
     }
 
-    // ИСПРАВЛЕННЫЙ МЕТОД extract с правильной обработкой символических ссылок
     private static boolean extract(Type type, InputStream source, File destination, OnExtractFileListener onExtractFileListener) {
         if (source == null) {
             Log.e(TAG, "Source stream is null");
@@ -199,14 +198,13 @@ public abstract class TarCompressorUtils {
                         file.mkdirs();
                         Log.d(TAG, "Created directory: " + file.getAbsolutePath());
                     }
+                    FileUtils.chmod(file, 0771);
                 }
-                // ========== ИСПРАВЛЕНИЕ: ПРАВИЛЬНАЯ ОБРАБОТКА СИМВОЛИЧЕСКИХ ССЫЛОК ==========
                 else if (entry.isSymbolicLink()) {
                     File parentDir = file.getParentFile();
                     if (parentDir != null && !parentDir.exists()) {
                         parentDir.mkdirs();
                     }
-                    // Удаляем существующий файл/ссылку, если она есть
                     if (file.exists()) {
                         file.delete();
                     }
@@ -218,7 +216,6 @@ public abstract class TarCompressorUtils {
                         return false;
                     }
                 }
-                // ========== КОНЕЦ ИСПРАВЛЕНИЯ ==========
                 else {
                     File parentDir = file.getParentFile();
                     if (parentDir != null && !parentDir.exists()) {
@@ -231,10 +228,9 @@ public abstract class TarCompressorUtils {
                             return false;
                         }
                     }
-                    Log.d(TAG, "Extracted file: " + entry.getName() + " (" + entry.getSize() + " bytes)");
+                    // Log.d(TAG, "Extracted file: " + entry.getName() + " (" + entry.getSize() + " bytes)");
+                    FileUtils.chmod(file, 0771);
                 }
-
-                FileUtils.chmod(file, 0771);
             }
             
             Log.d(TAG, "Successfully extracted " + entryCount + " files to " + destination);
