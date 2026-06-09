@@ -43,6 +43,9 @@ public abstract class FileUtils {
     }
 
     public static byte[] read(File file) {
+        if (file == null || !file.exists() || file.isDirectory()) {
+            return null;
+        }
         try (InputStream inStream = new BufferedInputStream(new FileInputStream(file))) {
             return StreamUtils.copyToByteArray(inStream);
         }
@@ -52,11 +55,20 @@ public abstract class FileUtils {
     }
 
     public static String readString(Context context, String assetFile) {
-        return new String(read(context, assetFile), StandardCharsets.UTF_8);
+        byte[] data = read(context, assetFile);
+        if (data == null) {
+            return "";
+        }
+        return new String(data, StandardCharsets.UTF_8);
     }
 
+    // ИСПРАВЛЕННЫЙ МЕТОД: защита от null
     public static String readString(File file) {
-        return new String(read(file), StandardCharsets.UTF_8);
+        byte[] data = read(file);
+        if (data == null) {
+            return "";
+        }
+        return new String(data, StandardCharsets.UTF_8);
     }
 
     public static String readString(Context context, Uri uri) {
@@ -68,11 +80,16 @@ public abstract class FileUtils {
             return sb.toString();
         }
         catch (IOException e) {
-            return null;
+            return "";
         }
     }
 
     public static boolean write(File file, byte[] data) {
+        if (file == null || data == null) return false;
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
         try (OutputStream os = new FileOutputStream(file)) {
             os.write(data, 0, data.length);
             return true;
@@ -84,6 +101,12 @@ public abstract class FileUtils {
     }
 
     public static boolean writeString(File file, String data) {
+        if (file == null) return false;
+        if (data == null) data = "";
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
+        }
         try (BufferedWriter bw = new BufferedWriter(new FileWriter(file))) {
             bw.write(data);
             bw.flush();
@@ -101,20 +124,28 @@ public abstract class FileUtils {
 
     public static void symlink(String linkTarget, String linkFile) {
         try {
-            (new File(linkFile)).delete();
+            File link = new File(linkFile);
+            if (link.exists()) {
+                delete(link);
+            }
             Os.symlink(linkTarget, linkFile);
         }
-        catch (ErrnoException e) {}
+        catch (ErrnoException e) {
+            // Ошибка создания ссылки - игнорируем
+        }
     }
 
     public static boolean isSymlink(File file) {
+        if (file == null) return false;
         return Files.isSymbolicLink(file.toPath());
     }
 
     public static boolean delete(File targetFile) {
         if (targetFile == null) return false;
         if (targetFile.isDirectory()) {
-            if (!isSymlink(targetFile)) if (!clear(targetFile)) return false;
+            if (!isSymlink(targetFile)) {
+                if (!clear(targetFile)) return false;
+            }
         }
         return targetFile.delete();
     }
@@ -155,6 +186,7 @@ public abstract class FileUtils {
     }
 
     public static boolean copy(File srcFile, File dstFile, Callback<File> callback) {
+        if (srcFile == null || dstFile == null) return false;
         if (isSymlink(srcFile)) return true;
         if (srcFile.isDirectory()) {
             if (isAscendantOf(srcFile, dstFile) || (!dstFile.exists() && !dstFile.mkdirs())) return false;
@@ -191,16 +223,19 @@ public abstract class FileUtils {
     }
 
     public static void copy(Context context, String assetFile, File dstFile) {
+        if (context == null || assetFile == null || dstFile == null) return;
         if (isDirectory(context, assetFile)) {
             if (!dstFile.isDirectory()) dstFile.mkdirs();
             try {
                 String[] filenames = context.getAssets().list(assetFile);
-                for (String filename : filenames) {
-                    String relativePath = StringUtils.addEndSlash(assetFile)+filename;
-                    if (isDirectory(context, relativePath)) {
-                        copy(context, relativePath, new File(dstFile, filename));
+                if (filenames != null) {
+                    for (String filename : filenames) {
+                        String relativePath = StringUtils.addEndSlash(assetFile)+filename;
+                        if (isDirectory(context, relativePath)) {
+                            copy(context, relativePath, new File(dstFile, filename));
+                        }
+                        else copy(context, relativePath, dstFile);
                     }
-                    else copy(context, relativePath, dstFile);
                 }
             }
             catch (IOException e) {}
@@ -208,7 +243,7 @@ public abstract class FileUtils {
         else {
             if (dstFile.isDirectory()) dstFile = new File(dstFile, FileUtils.getName(assetFile));
             File parent = dstFile.getParentFile();
-            if (!parent.isDirectory()) parent.mkdirs();
+            if (parent != null && !parent.isDirectory()) parent.mkdirs();
             try (InputStream inStream = context.getAssets().open(assetFile);
                  BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(dstFile), StreamUtils.BUFFER_SIZE)) {
                 StreamUtils.copy(inStream, outStream);
@@ -223,6 +258,7 @@ public abstract class FileUtils {
 
     public static ArrayList<String> readLines(File file, boolean skipEmptyLines) {
         ArrayList<String> lines = new ArrayList<>();
+        if (file == null || !file.exists()) return lines;
         try (FileInputStream fis = new FileInputStream(file)) {
             BufferedReader reader = new BufferedReader(new InputStreamReader(fis));
             String line;
@@ -259,6 +295,7 @@ public abstract class FileUtils {
     }
 
     public static void chmod(File file, int mode) {
+        if (file == null) return;
         try {
             Os.chmod(file.getAbsolutePath(), mode);
         }
@@ -266,6 +303,7 @@ public abstract class FileUtils {
     }
 
     public static File createTempFile(File parent, String prefix) {
+        if (parent == null) return null;
         File tempFile = null;
         boolean exists = true;
         while (exists) {
@@ -277,17 +315,20 @@ public abstract class FileUtils {
 
     public static String getFilePathFromUri(Uri uri) {
         String path = null;
-        if (uri.getAuthority().equals("com.android.externalstorage.documents")) {
+        if (uri != null && uri.getAuthority() != null && uri.getAuthority().equals("com.android.externalstorage.documents")) {
             String[] parts = uri.getLastPathSegment().split(":");
-            if (parts[0].equalsIgnoreCase("primary")) path = Environment.getExternalStorageDirectory() + "/" + parts[1];
+            if (parts.length > 0 && parts[0].equalsIgnoreCase("primary")) {
+                path = Environment.getExternalStorageDirectory() + "/" + parts[1];
+            }
         }
         return path;
     }
 
     public static boolean contentEquals(File origin, File target) {
+        if (origin == null || target == null) return false;
         if (origin.isDirectory() && target.isDirectory()) {
             File[] originFiles = origin.listFiles();
-            File[] targetFiles = origin.listFiles();
+            File[] targetFiles = target.listFiles();
 
             if (originFiles != null && targetFiles != null) {
                 if (originFiles.length != targetFiles.length) return false;
@@ -349,6 +390,7 @@ public abstract class FileUtils {
     }
 
     public static long getSize(Context context, String assetFile) {
+        if (context == null || assetFile == null) return 0;
         try (InputStream inStream = context.getAssets().open(assetFile)) {
             return inStream.available();
         }
@@ -366,6 +408,7 @@ public abstract class FileUtils {
     }
 
     public static boolean isDirectory(Context context, String assetFile) {
+        if (context == null || assetFile == null) return false;
         try {
             String[] files = context.getAssets().list(assetFile);
             return files != null && files.length > 0;
@@ -376,15 +419,19 @@ public abstract class FileUtils {
     }
 
     public static String toRelativePath(String basePath, String fullPath) {
+        if (basePath == null || fullPath == null) return "";
         return StringUtils.removeEndSlash((fullPath.startsWith("/") ? "/" : "")+(new File(basePath).toURI().relativize(new File(fullPath).toURI()).getPath()));
     }
 
     public static int readInt(String path) {
+        if (path == null) return 0;
         int result = 0;
         try {
             try (RandomAccessFile reader = new RandomAccessFile(path, "r")) {
                 String line = reader.readLine();
-                result = !line.isEmpty() ? Integer.parseInt(line) : 0;
+                if (line != null && !line.isEmpty()) {
+                    result = Integer.parseInt(line);
+                }
             }
         }
         catch (Exception e) {}
@@ -392,8 +439,12 @@ public abstract class FileUtils {
     }
 
     public static String readSymlink(File file) {
+        if (file == null) return "";
         try {
-            return Files.readSymbolicLink(file.toPath()).toString();
+            if (Files.isSymbolicLink(file.toPath())) {
+                return Files.readSymbolicLink(file.toPath()).toString();
+            }
+            return "";
         }
         catch (IOException e) {
             return "";
@@ -407,6 +458,7 @@ public abstract class FileUtils {
     }
 
     public static void openIntent(Activity activity, String path) {
+        if (activity == null || path == null) return;
         Intent intent;
         if (path.startsWith("file://")) {
             File file = new File(Uri.decode(path.replace("file://", "")));
