@@ -26,7 +26,6 @@ import com.winlator.xenvironment.RootFS
 import com.winlator.xenvironment.RootFSInstaller
 import org.json.JSONObject
 import java.io.File
-import java.io.FileOutputStream
 
 @SuppressLint("SetTextI18n")
 class SplashActivity : AppCompatActivity() {
@@ -81,12 +80,13 @@ class SplashActivity : AppCompatActivity() {
         
         downloader = NFSDownloader(this)
         setupUI()
+        
+        // Если RootFS не установлен, безопасно перенаправляем в MainActivity для базовой распаковки
+        if (checkAndInstallRootFS()) return
+        
         checkStoragePermissions()
         updateUI()
         logDebugInfo()
-        
-        // КРИТИЧЕСКИ ВАЖНО: Устанавливаем RootFS (копируем файлы из assets)
-        installRootFSIfNeeded()
     }
     
     override fun onStop() {
@@ -217,20 +217,28 @@ class SplashActivity : AppCompatActivity() {
         )
     }
 
-    // ========== НОВЫЙ МЕТОД: Установка RootFS ==========
-    private fun installRootFSIfNeeded() {
-        try {
-            Log.d("SplashActivity", "Checking RootFS installation...")
-            val rootFSInstaller = RootFSInstaller(this)
-            rootFSInstaller.installIfNeeded()
-            Log.d("SplashActivity", "RootFS installation check completed")
+    // ========== ИСПРАВЛЕННЫЙ МЕТОД: БЕЗОПАСНАЯ УСТАНОВКА ROOTFS ==========
+    private fun checkAndInstallRootFS(): Boolean {
+        return try {
+            val rootFS = RootFS.find(this)
+            if (!rootFS.isValid || rootFS.version < RootFSInstaller.LATEST_VERSION) {
+                Log.d("SplashActivity", "RootFS is missing or outdated. Redirecting to MainActivity for installation.")
+                Toast.makeText(this, "Выполняется первичная настройка, подождите...", Toast.LENGTH_LONG).show()
+                
+                val intent = Intent(this, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                }
+                startActivity(intent)
+                finish()
+                true // Указывает, что мы перенаправили пользователя
+            } else {
+                Log.d("SplashActivity", "RootFS is already installed and valid.")
+                false // Все в порядке, продолжаем работу SplashActivity
+            }
         } catch (e: Exception) {
-            Log.e("SplashActivity", "Failed to install RootFS", e)
+            Log.e("SplashActivity", "Error checking RootFS", e)
+            false
         }
-    }
-
-    private fun isRootFSInstalled(): Boolean {
-        return try { RootFS.find(this) != null } catch (e: Exception) { false }
     }
     
     private fun detectGraphicsDriver(): String {
@@ -261,12 +269,8 @@ class SplashActivity : AppCompatActivity() {
         }
         isPreparing = true
         
-        if (!isRootFSInstalled()) {
-            Toast.makeText(this, "Первичная настройка Winlator...", Toast.LENGTH_LONG).show()
-            startActivity(Intent(this, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-            })
-            finish()
+        // Надежная проверка перед созданием контейнера
+        if (checkAndInstallRootFS()) {
             return
         }
 
@@ -287,20 +291,17 @@ class SplashActivity : AppCompatActivity() {
         progressBar.visibility = View.VISIBLE
         progressBar.isIndeterminate = true
 
+        // ========== ИСПРАВЛЕНИЕ: ПРАВИЛЬНЫЙ ФОРМАТ DRIVES ДЛЯ WINLATOR ==========
+        val downloadsPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+        val drivesString = "D:$downloadsPath"
+        
         val data = JSONObject().apply {
             put("name", "NFS Underground 2")
             put("screenSize", "800x600")
             put("graphicsDriver", detectGraphicsDriver())
             put("dxwrapper", "wined3d")
             put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
-            
-            val drives = JSONObject().apply {
-                put("d", JSONObject().apply {
-                    put("path", Environment.getExternalStorageDirectory().absolutePath + "/Download")
-                    put("type", "External")
-                })
-            }
-            put("drives", drives)
+            put("drives", drivesString) // Передаем строку, которую ожидает Container.java
         }
 
         containerManager.createContainerAsync(data, object : Callback<Container> {
