@@ -81,7 +81,7 @@ class SplashActivity : AppCompatActivity() {
         downloader = NFSDownloader(this)
         setupUI()
         
-        // Если RootFS не установлен, безопасно перенаправляем в MainActivity для базовой распаковки
+        // Wait for RootFS to be checked/installed before proceeding
         if (checkAndInstallRootFS()) return
         
         checkStoragePermissions()
@@ -217,7 +217,6 @@ class SplashActivity : AppCompatActivity() {
         )
     }
 
-    // ========== ИСПРАВЛЕННЫЙ МЕТОД: БЕЗОПАСНАЯ УСТАНОВКА ROOTFS ==========
     private fun checkAndInstallRootFS(): Boolean {
         return try {
             val rootFS = RootFS.find(this)
@@ -230,10 +229,10 @@ class SplashActivity : AppCompatActivity() {
                 }
                 startActivity(intent)
                 finish()
-                true // Указывает, что мы перенаправили пользователя
+                true
             } else {
                 Log.d("SplashActivity", "RootFS is already installed and valid.")
-                false // Все в порядке, продолжаем работу SplashActivity
+                false
             }
         } catch (e: Exception) {
             Log.e("SplashActivity", "Error checking RootFS", e)
@@ -269,7 +268,6 @@ class SplashActivity : AppCompatActivity() {
         }
         isPreparing = true
         
-        // Надежная проверка перед созданием контейнера
         if (checkAndInstallRootFS()) {
             return
         }
@@ -291,7 +289,6 @@ class SplashActivity : AppCompatActivity() {
         progressBar.visibility = View.VISIBLE
         progressBar.isIndeterminate = true
 
-        // ========== ИСПРАВЛЕНИЕ: ПРАВИЛЬНЫЙ ФОРМАТ DRIVES ДЛЯ WINLATOR ==========
         val downloadsPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
         val drivesString = "D:$downloadsPath"
         
@@ -301,7 +298,7 @@ class SplashActivity : AppCompatActivity() {
             put("graphicsDriver", detectGraphicsDriver())
             put("dxwrapper", "wined3d")
             put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
-            put("drives", drivesString) // Передаем строку, которую ожидает Container.java
+            put("drives", drivesString)
         }
 
         containerManager.createContainerAsync(data, object : Callback<Container> {
