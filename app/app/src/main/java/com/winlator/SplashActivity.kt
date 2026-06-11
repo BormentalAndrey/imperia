@@ -19,11 +19,15 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.winlator.container.Container
 import com.winlator.container.ContainerManager
 import com.winlator.core.Callback
 import com.winlator.xenvironment.RootFS
 import com.winlator.xenvironment.RootFSInstaller
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
@@ -35,28 +39,19 @@ class SplashActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var actionButton: Button
     
-    private var containerReady = false
-    private var isPreparing = false
-    private var isGameLaunched = false
+    private var isWorking = false
 
     private val exeFile = File(Environment.getExternalStorageDirectory(), "Download/nfsu2/SPEED2.EXE")
     private val gamePathOnD = "D:\\nfsu2\\SPEED2.EXE"
-    private val workingDir = "D:\\nfsu2"
 
     private val storagePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (Environment.isExternalStorageManager()) {
-                updateUI()
-                if (!containerReady && (exeFile.exists() || downloader.isGameInstalled())) {
-                    prepareContainer()
-                } else if (containerReady && !isGameLaunched) {
-                    launchGame()
-                }
-            } else {
-                Toast.makeText(this, "Для работы требуется разрешение на доступ к файлам!", Toast.LENGTH_LONG).show()
-            }
+        if (hasStoragePermission()) {
+            startInitializationFlow()
+        } else {
+            Toast.makeText(this, "Требуется разрешение на управление файлами!", Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 
@@ -64,14 +59,10 @@ class SplashActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            updateUI()
-            if (!containerReady && (exeFile.exists() || downloader.isGameInstalled())) {
-                prepareContainer()
-            } else if (containerReady && !isGameLaunched) {
-                launchGame()
-            }
+            startInitializationFlow()
         } else {
-            Toast.makeText(this, "Для работы требуется разрешение на чтение файлов!", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Требуется разрешение на хранилище!", Toast.LENGTH_LONG).show()
+            finish()
         }
     }
 
@@ -81,52 +72,33 @@ class SplashActivity : AppCompatActivity() {
         downloader = NFSDownloader(this)
         setupUI()
         
-        // Wait for RootFS to be checked/installed before proceeding
-        if (checkAndInstallRootFS()) return
-        
-        checkStoragePermissions()
-        updateUI()
-        logDebugInfo()
-    }
-    
-    override fun onStop() {
-        super.onStop()
-        Log.d("SplashActivity", "onStop called - Activity stopped but not destroyed")
-    }
-    
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.d("SplashActivity", "onDestroy called")
-    }
-    
-    private fun logDebugInfo() {
-        Log.d("SplashActivity", "=== NFS Underground 2 Launcher ===")
-        Log.d("SplashActivity", "Путь к игре: ${exeFile.absolutePath}")
-        Log.d("SplashActivity", "Игра существует: ${exeFile.exists()}")
-        if (exeFile.exists()) {
-            Log.d("SplashActivity", "Размер игры: ${exeFile.length()} bytes")
+        if (hasStoragePermission()) {
+            startInitializationFlow()
+        } else {
+            requestStoragePermission()
         }
-        Log.d("SplashActivity", "Путь в Winlator: $gamePathOnD")
-        Log.d("SplashActivity", "Рабочая директория: $workingDir")
+    }
+    
+    private fun hasStoragePermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
     }
 
-    private fun checkStoragePermissions() {
+    private fun requestStoragePermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                try {
-                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.data = Uri.parse("package:$packageName")
-                    storagePermissionLauncher.launch(intent)
-                } catch (e: Exception) {
-                    val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                    storagePermissionLauncher.launch(intent)
-                }
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = Uri.parse("package:$packageName")
+                storagePermissionLauncher.launch(intent)
+            } catch (e: Exception) {
+                val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                storagePermissionLauncher.launch(intent)
             }
         } else {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) 
-                != PackageManager.PERMISSION_GRANTED) {
-                legacyPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            }
+            legacyPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
     }
 
@@ -142,26 +114,23 @@ class SplashActivity : AppCompatActivity() {
         })
 
         statusText = TextView(this).apply {
-            text = "Проверка..."
+            text = "Проверка среды..."
             textSize = 18f
             setPadding(0, 32, 0, 16)
         }
         layout.addView(statusText)
 
         progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = false
+            isIndeterminate = true
             max = 100
-            visibility = View.GONE
+            visibility = View.VISIBLE
         }
         layout.addView(progressBar)
 
         actionButton = Button(this).apply {
+            visibility = View.GONE
             setOnClickListener {
-                if (containerReady) {
-                    launchGame()
-                } else if (exeFile.exists() || downloader.isGameInstalled()) {
-                    prepareContainer()
-                } else {
+                if (!exeFile.exists() && !downloader.isGameInstalled()) {
                     startDownload()
                 }
             }
@@ -171,124 +140,74 @@ class SplashActivity : AppCompatActivity() {
         setContentView(layout)
     }
 
-    private fun updateUI() {
-        if (exeFile.exists() || downloader.isGameInstalled()) {
-            if (containerReady) {
-                statusText.text = "✓ Готово к запуску"
-                actionButton.text = "ЗАПУСТИТЬ NFS UNDERGROUND 2"
-            } else {
-                statusText.text = "✓ Игра установлена"
-                actionButton.text = "НАСТРОИТЬ И ЗАПУСТИТЬ"
-            }
-        } else {
-            statusText.text = "Игра не установлена\nСкопируйте игру в:\nDownload/nfsu2/"
-            actionButton.text = "СКАЧАТЬ (2.1 GB)"
-        }
-    }
+    // Главный метод инициализации: не блокирует UI и выполняется последовательно
+    private fun startInitializationFlow() {
+        if (isWorking) return
+        isWorking = true
 
-    private fun startDownload() {
-        actionButton.isEnabled = false
-        progressBar.visibility = View.VISIBLE
-        downloader.downloadGame(
-            onProgress = { progress ->
-                if (!isDestroyed && !isFinishing) {
-                    runOnUiThread {
-                        progressBar.isIndeterminate = false
-                        progressBar.progress = progress
-                        statusText.text = "Скачивание: $progress%"
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                // 1. Установка/Проверка RootFS (теперь работает без MainActivity)
+                val rootFS = RootFS.find(this@SplashActivity)
+                if (!rootFS.isValid || rootFS.version < RootFSInstaller.LATEST_VERSION) {
+                    withContext(Dispatchers.Main) {
+                        statusText.text = "Распаковка базовой системы (занимает время)..."
+                        progressBar.isIndeterminate = true
+                        progressBar.visibility = View.VISIBLE
+                    }
+                    
+                    val success = RootFSInstaller.installSynchronous(this@SplashActivity)
+                    if (!success) {
+                        throw Exception("Не удалось распаковать rootfs.tzst")
                     }
                 }
-            },
-            onComplete = { success ->
-                if (!isDestroyed && !isFinishing) {
-                    runOnUiThread {
+
+                // 2. Создание контейнера
+                withContext(Dispatchers.Main) {
+                    statusText.text = "Проверка контейнера..."
+                }
+
+                val containerManager = ContainerManager(this@SplashActivity)
+                var container = containerManager.containers.find { it.name == "NFS Underground 2" }
+
+                if (container == null) {
+                    withContext(Dispatchers.Main) {
+                        statusText.text = "Создание среды..."
+                    }
+                    container = createContainerSynchronous(containerManager)
+                    if (container == null) {
+                         throw Exception("Ошибка создания контейнера")
+                    }
+                }
+
+                // 3. Проверка игры
+                if (exeFile.exists() || downloader.isGameInstalled()) {
+                    withContext(Dispatchers.Main) {
+                        statusText.text = "Запуск игры..."
+                        launchGame(container)
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        statusText.text = "Игра не найдена. Скачайте файлы."
                         progressBar.visibility = View.GONE
-                        actionButton.isEnabled = true
-                        if (success) {
-                            Toast.makeText(this@SplashActivity, "Игра установлена!", Toast.LENGTH_LONG).show()
-                            updateUI()
-                        } else {
-                            statusText.text = "Ошибка скачивания"
-                            actionButton.text = "ПОВТОРИТЬ"
-                        }
+                        actionButton.text = "СКАЧАТЬ ИГРУ"
+                        actionButton.visibility = View.VISIBLE
+                        isWorking = false
                     }
                 }
-            }
-        )
-    }
 
-    private fun checkAndInstallRootFS(): Boolean {
-        return try {
-            val rootFS = RootFS.find(this)
-            if (!rootFS.isValid || rootFS.version < RootFSInstaller.LATEST_VERSION) {
-                Log.d("SplashActivity", "RootFS is missing or outdated. Redirecting to MainActivity for installation.")
-                Toast.makeText(this, "Выполняется первичная настройка, подождите...", Toast.LENGTH_LONG).show()
-                
-                val intent = Intent(this, MainActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                }
-                startActivity(intent)
-                finish()
-                true
-            } else {
-                Log.d("SplashActivity", "RootFS is already installed and valid.")
-                false
-            }
-        } catch (e: Exception) {
-            Log.e("SplashActivity", "Error checking RootFS", e)
-            false
-        }
-    }
-    
-    private fun detectGraphicsDriver(): String {
-        return try {
-            val hardware = Build.HARDWARE.lowercase()
-            val board = Build.BOARD.lowercase()
-            val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Build.SOC_MODEL.lowercase()
-            } else ""
-            
-            when {
-                hardware.contains("qcom") || board.contains("msm") || soc.contains("snapdragon") -> "turnip"
-                hardware.contains("mt") || board.contains("mt") || soc.contains("mediatek") -> "virgl"
-                else -> {
-                    val cpuInfo = try { File("/proc/cpuinfo").readText().lowercase() } catch (e: Exception) { "" }
-                    if (cpuInfo.contains("mediatek") || cpuInfo.contains("mt")) "virgl" else "turnip"
+            } catch (e: Exception) {
+                Log.e("SplashActivity", "Initialization Error", e)
+                withContext(Dispatchers.Main) {
+                    statusText.text = "Ошибка: ${e.message}"
+                    progressBar.visibility = View.GONE
+                    isWorking = false
                 }
             }
-        } catch (e: Exception) {
-            "turnip"
         }
     }
 
-    private fun prepareContainer() {
-        if (isPreparing) {
-            Log.d("SplashActivity", "Already preparing, skipping")
-            return
-        }
-        isPreparing = true
-        
-        if (checkAndInstallRootFS()) {
-            return
-        }
-
-        val containerManager = ContainerManager(this)
-        val existingContainer = containerManager.containers.find { it.name == "NFS Underground 2" }
-        
-        if (existingContainer != null) {
-            Log.d("SplashActivity", "Found existing container: ${existingContainer.id}")
-            containerReady = true
-            isPreparing = false
-            updateUI()
-            if (!isGameLaunched) launchGame()
-            return
-        }
-
-        actionButton.isEnabled = false
-        statusText.text = "Создание контейнера..."
-        progressBar.visibility = View.VISIBLE
-        progressBar.isIndeterminate = true
-
+    private suspend fun createContainerSynchronous(manager: ContainerManager): Container? = suspendCoroutine { cont ->
         val downloadsPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
         val drivesString = "D:$downloadsPath"
         
@@ -301,155 +220,81 @@ class SplashActivity : AppCompatActivity() {
             put("drives", drivesString)
         }
 
-        containerManager.createContainerAsync(data, object : Callback<Container> {
+        manager.createContainerAsync(data, object : Callback<Container> {
             override fun call(container: Container?) {
-                if (!isDestroyed && !isFinishing) {
-                    runOnUiThread {
-                        progressBar.visibility = View.GONE
-                        actionButton.isEnabled = true
-                        isPreparing = false
-                        if (container != null) {
-                            containerReady = true
-                            Toast.makeText(this@SplashActivity, "Контейнер создан!", Toast.LENGTH_SHORT).show()
-                            updateUI()
-                            if (!isGameLaunched) launchGame()
-                        } else {
-                            statusText.text = "Ошибка создания контейнера"
-                        }
-                    }
-                } else {
-                    isPreparing = false
-                }
+                cont.resume(container)
             }
         })
     }
-    
-    private fun createDesktopFile(container: Container): File? {
+
+    private fun detectGraphicsDriver(): String {
         return try {
-            val desktopDir = File(container.rootDir, "desktop_files")
-            if (!desktopDir.exists()) {
-                desktopDir.mkdirs()
+            val hardware = Build.HARDWARE.lowercase()
+            val board = Build.BOARD.lowercase()
+            val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL.lowercase() else ""
+            when {
+                hardware.contains("qcom") || board.contains("msm") || soc.contains("snapdragon") -> "turnip"
+                hardware.contains("mt") || board.contains("mt") || soc.contains("mediatek") -> "virgl"
+                else -> "turnip"
             }
-            
-            val desktopFile = File(desktopDir, "nfs_underground_2.desktop")
-            
-            val escapedPath = gamePathOnD.replace("\\", "\\\\")
-            val escapedWorkingDir = workingDir.replace("\\", "\\\\")
-            
-            val desktopContent = """
-                [Desktop Entry]
-                Name=Need for Speed Underground 2
-                Exec=wine "$escapedPath"
-                Path=$escapedWorkingDir
-                Type=Application
-                StartupNotify=false
-                Icon=default
-                Categories=Game;
-                X-Wine-Box64-Preset=intermediate
-                X-Wine-DXVK=2.4.1
-                X-Wine-Graphics-Driver=${detectGraphicsDriver()}
-                X-Wine-Environment=MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5
-            """.trimIndent()
-            
-            desktopFile.writeText(desktopContent)
-            Log.d("SplashActivity", "Desktop file created: ${desktopFile.absolutePath}")
-            Log.d("SplashActivity", "Escaped path: $escapedPath")
-            
-            desktopFile
         } catch (e: Exception) {
-            Log.e("SplashActivity", "Failed to create desktop file", e)
-            null
+            "turnip"
         }
     }
 
-    private fun launchGame() {
-        if (!containerReady) { 
-            prepareContainer()
-            return 
-        }
+    private fun startDownload() {
+        actionButton.isEnabled = false
+        progressBar.visibility = View.VISIBLE
+        progressBar.isIndeterminate = false
+        
+        downloader.downloadGame(
+            onProgress = { progress ->
+                if (!isDestroyed && !isFinishing) {
+                    runOnUiThread {
+                        progressBar.progress = progress
+                        statusText.text = "Скачивание: $progress%"
+                    }
+                }
+            },
+            onComplete = { success ->
+                if (!isDestroyed && !isFinishing) {
+                    runOnUiThread {
+                        if (success) {
+                            Toast.makeText(this@SplashActivity, "Игра установлена!", Toast.LENGTH_LONG).show()
+                            isWorking = false
+                            startInitializationFlow() // Рестарт процесса после скачивания
+                        } else {
+                            statusText.text = "Ошибка скачивания"
+                            actionButton.text = "ПОВТОРИТЬ"
+                            actionButton.isEnabled = true
+                        }
+                    }
+                }
+            }
+        )
+    }
 
+    private fun launchGame(container: Container) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(Intent(this, KeepAliveService::class.java))
-                Log.d("SplashActivity", "KeepAliveService started (Android O+)")
             } else {
                 startService(Intent(this, KeepAliveService::class.java))
-                Log.d("SplashActivity", "KeepAliveService started (legacy)")
-            }
-            
-            val containerManager = ContainerManager(this)
-            val container = containerManager.containers.find { it.name == "NFS Underground 2" }
-                ?: containerManager.containers.firstOrNull()
-                
-            if (container == null) {
-                Toast.makeText(this, "Контейнер не найден", Toast.LENGTH_LONG).show()
-                containerReady = false
-                return
-            }
-            
-            if (!exeFile.exists()) {
-                Toast.makeText(this, "Файл не найден!\n${exeFile.absolutePath}\n\nСкопируйте игру в:\nDownload/nfsu2/", Toast.LENGTH_LONG).show()
-                return
             }
 
-            Log.d("SplashActivity", "=== Запуск NFS Underground 2 ===")
-            Log.d("SplashActivity", "Контейнер: ${container.id}")
-            Log.d("SplashActivity", "Путь в Windows: $gamePathOnD")
-            
             val cleanPath = gamePathOnD.replace("\\", "/")
-            Log.d("SplashActivity", "Clean path for Wine: $cleanPath")
             
             val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
                 putExtra("exec_path", cleanPath)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             startActivity(intent)
-            
-            isGameLaunched = true 
-            moveTaskToBack(true)
-            
-            Log.d("SplashActivity", "XServerDisplayActivity started, SplashActivity preserved in background")
-            
+            finish() // Закрываем Splash, чтобы не висел в памяти и не ловил onResume
+
         } catch (e: Exception) {
             Log.e("SplashActivity", "Ошибка запуска", e)
             Toast.makeText(this, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
-            isGameLaunched = false
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        Log.d("SplashActivity", "onResume called, containerReady=$containerReady, isPreparing=$isPreparing")
-        
-        if (isGameLaunched) {
-            Log.d("SplashActivity", "Game already launched, skipping auto-start to prevent loop")
-            return
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (Environment.isExternalStorageManager()) {
-                if (!containerReady && !isPreparing && (exeFile.exists() || downloader.isGameInstalled())) {
-                    Log.d("SplashActivity", "Auto-starting prepareContainer from onResume")
-                    prepareContainer()
-                } else if (containerReady) {
-                    Log.d("SplashActivity", "Auto-starting launchGame from onResume")
-                    launchGame()
-                } else {
-                    updateUI()
-                }
-            } else {
-                Log.d("SplashActivity", "Permission not granted yet")
-                updateUI()
-            }
-        } else {
-            if (!containerReady && !isPreparing && (exeFile.exists() || downloader.isGameInstalled())) {
-                prepareContainer()
-            } else if (containerReady) {
-                launchGame()
-            } else {
-                updateUI()
-            }
+            isWorking = false
         }
     }
 }
