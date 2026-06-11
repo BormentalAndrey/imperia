@@ -43,7 +43,8 @@ class SplashActivity : AppCompatActivity() {
     
     private var isWorking = false
 
-    private val exeFile = File(Environment.getExternalStorageDirectory(), "Download/nfsu2/SPEED2.EXE")
+    // FIXED: Pointing to the correct directory where NFSDownloader puts the files
+    private val exeFile = File(Environment.getExternalStorageDirectory(), "RetroEmulator/games/nfsu2/SPEED2.EXE")
     private val gamePathOnD = "D:\\nfsu2\\SPEED2.EXE"
 
     private val storagePermissionLauncher = registerForActivityResult(
@@ -206,8 +207,9 @@ class SplashActivity : AppCompatActivity() {
     }
 
     private suspend fun createContainerSynchronous(manager: ContainerManager): Container? = suspendCoroutine { cont ->
-        val downloadsPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
-        val drivesString = "D:$downloadsPath"
+        // FIXED: Mount drive D to the specific games folder
+        val gamesPath = File(Environment.getExternalStorageDirectory(), "RetroEmulator/games").absolutePath
+        val drivesString = "D:$gamesPath"
         
         val data = JSONObject().apply {
             put("name", "NFS Underground 2")
@@ -280,11 +282,10 @@ class SplashActivity : AppCompatActivity() {
                 startService(Intent(this, KeepAliveService::class.java))
             }
 
-            val cleanPath = gamePathOnD.replace("\\", "/")
-            
+            // FIXED: Do NOT replace backslashes. Wine/winhandler needs them.
             val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
-                putExtra("exec_path", cleanPath)
+                putExtra("exec_path", gamePathOnD)
             }
             startActivity(intent)
             finish()
