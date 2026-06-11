@@ -46,7 +46,7 @@ public abstract class RootFSInstaller {
         }
     }
 
-    // ORIGINAL METHOD: Retained for backward compatibility
+    // Оригинальный метод для обратной совместимости
     public static void install(final MainActivity activity) {
         AppUtils.keepScreenOn(activity);
         RootFS rootFS = RootFS.find(activity);
@@ -82,21 +82,21 @@ public abstract class RootFSInstaller {
         });
     }
 
-    // NEW METHOD: Synchronous install for One-Click Launcher (No Dialogs)
-    public static boolean installSynchronous(final Context context) {
+    // ИСПРАВЛЕННЫЙ МЕТОД: Принимает AppCompatActivity вместо Context для фикса resetBox64Version
+    public static boolean installSynchronous(final AppCompatActivity activity) {
         Log.d(TAG, "Starting synchronous RootFS installation from assets");
-        RootFS rootFS = RootFS.find(context);
+        RootFS rootFS = RootFS.find(activity);
         final File rootDir = rootFS.getRootDir();
 
-        SettingsFragment.resetBox64Version(context);
+        SettingsFragment.resetBox64Version(activity);
         clearRootDir(rootDir);
 
-        boolean success = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, context, FILENAME, rootDir, null);
+        boolean success = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir, null);
 
         if (success) {
             Log.d(TAG, "RootFS successfully extracted");
             rootFS.createRFSVersionFile(LATEST_VERSION);
-            resetContainerRFSVersions(context);
+            resetContainerRFSVersions(activity);
             return true;
         } else {
             Log.e(TAG, "Failed to extract RootFS");
