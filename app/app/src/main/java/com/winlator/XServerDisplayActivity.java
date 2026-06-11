@@ -1027,6 +1027,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             if (intent.hasExtra("exec_path")) {
                 String rawPath = intent.getStringExtra("exec_path");
                 
+                // Если путь уже в формате DOS (например, D:\nfsu2\SPEED2.EXE)
                 if (rawPath != null && rawPath.matches("[A-Za-z]:.*")) {
                     execPath = rawPath;
                 } else {
@@ -1041,9 +1042,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         if (execPath != null) {
-            String cleanPath = execPath.replace("\\", "/");
+            // ИСПРАВЛЕНИЕ: Используем обратные слеши для Windows-путей!
+            String cleanPath = execPath.replace("/", "\\"); 
             
-            int lastSlash = cleanPath.lastIndexOf('/');
+            int lastSlash = cleanPath.lastIndexOf('\\');
             String execDir;
             String filename;
             
@@ -1067,7 +1069,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             overrideEnvVars.remove("EXTRA_EXEC_ARGS");
         }
         
-        String fullCommand = "\"C:/windows/winhandler.exe\" " + cmdArgs;
+        // ВАЖНО: Обязательно используйте обратные слеши для пути к winhandler.exe
+        String fullCommand = "\"C:\\windows\\winhandler.exe\" " + cmdArgs;
         return fullCommand;
     }
 
@@ -1188,4 +1191,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
         else return false;
     }
+}
+
 }
