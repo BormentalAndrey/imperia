@@ -30,6 +30,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import kotlin.coroutines.suspendCoroutine
+import kotlin.coroutines.resume
 
 @SuppressLint("SetTextI18n")
 class SplashActivity : AppCompatActivity() {
@@ -140,14 +142,12 @@ class SplashActivity : AppCompatActivity() {
         setContentView(layout)
     }
 
-    // Главный метод инициализации: не блокирует UI и выполняется последовательно
     private fun startInitializationFlow() {
         if (isWorking) return
         isWorking = true
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // 1. Установка/Проверка RootFS (теперь работает без MainActivity)
                 val rootFS = RootFS.find(this@SplashActivity)
                 if (!rootFS.isValid || rootFS.version < RootFSInstaller.LATEST_VERSION) {
                     withContext(Dispatchers.Main) {
@@ -162,7 +162,6 @@ class SplashActivity : AppCompatActivity() {
                     }
                 }
 
-                // 2. Создание контейнера
                 withContext(Dispatchers.Main) {
                     statusText.text = "Проверка контейнера..."
                 }
@@ -180,7 +179,6 @@ class SplashActivity : AppCompatActivity() {
                     }
                 }
 
-                // 3. Проверка игры
                 if (exeFile.exists() || downloader.isGameInstalled()) {
                     withContext(Dispatchers.Main) {
                         statusText.text = "Запуск игры..."
@@ -262,7 +260,7 @@ class SplashActivity : AppCompatActivity() {
                         if (success) {
                             Toast.makeText(this@SplashActivity, "Игра установлена!", Toast.LENGTH_LONG).show()
                             isWorking = false
-                            startInitializationFlow() // Рестарт процесса после скачивания
+                            startInitializationFlow()
                         } else {
                             statusText.text = "Ошибка скачивания"
                             actionButton.text = "ПОВТОРИТЬ"
@@ -289,7 +287,7 @@ class SplashActivity : AppCompatActivity() {
                 putExtra("exec_path", cleanPath)
             }
             startActivity(intent)
-            finish() // Закрываем Splash, чтобы не висел в памяти и не ловил onResume
+            finish()
 
         } catch (e: Exception) {
             Log.e("SplashActivity", "Ошибка запуска", e)
