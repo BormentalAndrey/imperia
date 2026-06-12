@@ -1192,5 +1192,3 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         else return false;
     }
 }
-
-}
