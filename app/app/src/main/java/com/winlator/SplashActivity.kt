@@ -43,9 +43,22 @@ class SplashActivity : AppCompatActivity() {
     
     private var isWorking = false
 
-    // FIXED: Pointing to the correct directory where NFSDownloader puts the files
-    private val exeFile = File(Environment.getExternalStorageDirectory(), "RetroEmulator/games/nfsu2/SPEED2.EXE")
-    private val gamePathOnD = "D:\\nfsu2\\SPEED2.EXE"
+    // ИСПРАВЛЕНО: Базовая папка, куда NFSDownloader помещает файлы
+    private val baseGameDir = File(Environment.getExternalStorageDirectory(), "RetroEmulator/games/nfsu2")
+    
+    // ИСПРАВЛЕНО: Функция для безопасного поиска файла без учета регистра букв (speed2.exe / SPEED2.EXE)
+    private fun getActualExeFile(): File? {
+        if (!baseGameDir.exists() || !baseGameDir.isDirectory) return null
+        return baseGameDir.listFiles()?.find { it.name.equals("SPEED2.EXE", ignoreCase = true) }
+    }
+
+    // ИСПРАВЛЕНО: Переменные стали динамическими (get()). 
+    // Они подставляют реальное имя файла из системы и предотвращают ошибки "файл не найден".
+    private val exeFile: File
+        get() = getActualExeFile() ?: File(baseGameDir, "SPEED2.EXE")
+
+    private val gamePathOnD: String
+        get() = "D:\\nfsu2\\${exeFile.name}"
 
     private val storagePermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
