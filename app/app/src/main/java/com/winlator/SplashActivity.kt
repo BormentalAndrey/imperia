@@ -43,16 +43,16 @@ class SplashActivity : AppCompatActivity() {
     
     private var isWorking = false
 
-    // ИСПРАВЛЕНО: Базовая папка, куда NFSDownloader помещает файлы
-    private val baseGameDir = File(Environment.getExternalStorageDirectory(), "RetroEmulator/games/nfsu2")
+    // ИСПРАВЛЕНО: Теперь базовая папка указывает на стандартную системную директорию Download/nfsu2
+    private val baseGameDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "nfsu2")
     
-    // ИСПРАВЛЕНО: Функция для безопасного поиска файла без учета регистра букв (speed2.exe / SPEED2.EXE)
+    // Функция для безопасного поиска файла без учета регистра букв (speed2.exe / SPEED2.EXE)
     private fun getActualExeFile(): File? {
         if (!baseGameDir.exists() || !baseGameDir.isDirectory) return null
         return baseGameDir.listFiles()?.find { it.name.equals("SPEED2.EXE", ignoreCase = true) }
     }
 
-    // ИСПРАВЛЕНО: Переменные стали динамическими (get()). 
+    // Переменные стали динамическими (get()). 
     // Они подставляют реальное имя файла из системы и предотвращают ошибки "файл не найден".
     private val exeFile: File
         get() = getActualExeFile() ?: File(baseGameDir, "SPEED2.EXE")
@@ -220,9 +220,9 @@ class SplashActivity : AppCompatActivity() {
     }
 
     private suspend fun createContainerSynchronous(manager: ContainerManager): Container? = suspendCoroutine { cont ->
-        // FIXED: Mount drive D to the specific games folder
-        val gamesPath = File(Environment.getExternalStorageDirectory(), "RetroEmulator/games").absolutePath
-        val drivesString = "D:$gamesPath"
+        // ИСПРАВЛЕНО: Монтируем диск D на папку Download. Внутри Wine путь D:\nfsu2 будет вести в /Download/nfsu2
+        val downloadsPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+        val drivesString = "D:$downloadsPath"
         
         val data = JSONObject().apply {
             put("name", "NFS Underground 2")
@@ -295,7 +295,7 @@ class SplashActivity : AppCompatActivity() {
                 startService(Intent(this, KeepAliveService::class.java))
             }
 
-            // FIXED: Do NOT replace backslashes. Wine/winhandler needs them.
+            // ИСПРАВЛЕНО: Обратные слэши оставлены нетронутыми, они необходимы для корректной обработки внутри WinHandler/Wine
             val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
                 putExtra("exec_path", gamePathOnD)
