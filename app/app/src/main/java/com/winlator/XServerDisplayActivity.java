@@ -1008,6 +1008,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return getIntent().getBooleanExtra("generate_wineprefix", false);
     }
 
+    // ИСПРАВЛЕНО: Этот метод теперь передает путь напрямую без парсинга и /dir.
     private String getWineStartCommand() {
         String cmdArgs = "";
         String execPath = null;
@@ -1027,7 +1028,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             if (intent.hasExtra("exec_path")) {
                 String rawPath = intent.getStringExtra("exec_path");
                 
-                // Если путь уже в формате DOS (например, D:\nfsu2\SPEED2.EXE)
+                // Если мы передали D:\nfsu2\SPEED2.EXE, он попадёт сюда
                 if (rawPath != null && rawPath.matches("[A-Za-z]:.*")) {
                     execPath = rawPath;
                 } else {
@@ -1042,22 +1043,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         if (execPath != null) {
-            // ИСПРАВЛЕНИЕ: Используем обратные слеши для Windows-путей!
-            String cleanPath = execPath.replace("/", "\\"); 
-            
-            int lastSlash = cleanPath.lastIndexOf('\\');
-            String execDir;
-            String filename;
-            
-            if (lastSlash > 0) {
-                execDir = cleanPath.substring(0, lastSlash);
-                filename = cleanPath.substring(lastSlash + 1);
-            } else {
-                execDir = cleanPath;
-                filename = cleanPath;
-            }
-            
-            cmdArgs = "/dir \"" + execDir + "\" \"" + filename + "\"" + execArgs;
+            // МЫ БОЛЬШЕ НЕ РАЗБИВАЕМ ПУТЬ ЧЕРЕЗ /dir. 
+            // Передаем абсолютный путь в кавычках прямо в winhandler.
+            cmdArgs = "\"" + execPath + "\"" + execArgs;
         }
 
         if (cmdArgs.isEmpty()) {
@@ -1069,7 +1057,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             overrideEnvVars.remove("EXTRA_EXEC_ARGS");
         }
         
-        // ВАЖНО: Обязательно используйте обратные слеши для пути к winhandler.exe
         String fullCommand = "\"C:\\windows\\winhandler.exe\" " + cmdArgs;
         return fullCommand;
     }
