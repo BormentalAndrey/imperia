@@ -250,6 +250,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         preloaderDialog.show(R.string.starting_up);
 
+        // ИСПРАВЛЕНО: Добавляем таймер на 5 секунд, который скроет вечную загрузку
+        // Это позволит нам увидеть, что на самом деле происходит под ней (вылет или рабочий стол)
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            preloaderDialog.closeOnUiThread();
+        }, 5000);
+
         inputControlsManager = new InputControlsManager(this);
         xServer = new XServer(this, screenInfo);
         xServer.setWinHandler(winHandler);
@@ -1008,7 +1014,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return getIntent().getBooleanExtra("generate_wineprefix", false);
     }
 
-    // ИСПРАВЛЕНО: Этот метод теперь передает путь напрямую без парсинга и /dir.
     private String getWineStartCommand() {
         String cmdArgs = "";
         String execPath = null;
@@ -1028,7 +1033,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             if (intent.hasExtra("exec_path")) {
                 String rawPath = intent.getStringExtra("exec_path");
                 
-                // Если мы передали D:\nfsu2\SPEED2.EXE, он попадёт сюда
                 if (rawPath != null && rawPath.matches("[A-Za-z]:.*")) {
                     execPath = rawPath;
                 } else {
@@ -1043,8 +1047,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         if (execPath != null) {
-            // МЫ БОЛЬШЕ НЕ РАЗБИВАЕМ ПУТЬ ЧЕРЕЗ /dir. 
-            // Передаем абсолютный путь в кавычках прямо в winhandler.
             cmdArgs = "\"" + execPath + "\"" + execArgs;
         }
 
