@@ -296,10 +296,11 @@ class SplashActivity : AppCompatActivity() {
                 startService(Intent(this, KeepAliveService::class.java))
             }
 
-            // FIXED: Do NOT replace backslashes. Wine/winhandler needs them.
             val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
-                putExtra("exec_path", gamePathOnD)
+                
+                // ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ДЕБАГА:
+                // putExtra("exec_path", gamePathOnD)
             }
             startActivity(intent)
             finish()
