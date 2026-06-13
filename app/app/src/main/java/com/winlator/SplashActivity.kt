@@ -43,17 +43,13 @@ class SplashActivity : AppCompatActivity() {
     
     private var isWorking = false
 
-    // Базовая папка, куда NFSDownloader помещает файлы
     private val baseGameDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "nfsu2")
     
-    // Функция для безопасного поиска файла без учета регистра букв (speed2.exe / SPEED2.EXE)
     private fun getActualExeFile(): File? {
         if (!baseGameDir.exists() || !baseGameDir.isDirectory) return null
         return baseGameDir.listFiles()?.find { it.name.equals("SPEED2.EXE", ignoreCase = true) }
     }
 
-    // Переменные стали динамическими (get()). 
-    // Они подставляют реальное имя файла из системы и предотвращают ошибки "файл не найден".
     private val exeFile: File
         get() = getActualExeFile() ?: File(baseGameDir, "SPEED2.EXE")
 
@@ -226,11 +222,11 @@ class SplashActivity : AppCompatActivity() {
         val data = JSONObject().apply {
             put("name", "NFS Underground 2")
             put("screenSize", "800x600")
-            put("graphicsDriver", detectGraphicsDriver())
-            // ИСПРАВЛЕНО: Безопасный режим графики для теста
+            // ЖЕСТКО для MediaTek/Mali: только virgl работает.
+            put("graphicsDriver", "virgl") 
             put("dxwrapper", "wined3d") 
-            // ИСПРАВЛЕНО: Убраны агрессивные флаги, которые крашили X-сервер
-            put("envVars", "") 
+            // СПАСАТЕЛЬНЫЕ ФЛАГИ ДЛЯ MALI: без них wined3d крашится.
+            put("envVars", "MESA_GL_VERSION_OVERRIDE=4.0 MESA_GLSL_VERSION_OVERRIDE=400") 
             put("drives", drivesString)
         }
 
@@ -248,12 +244,10 @@ class SplashActivity : AppCompatActivity() {
             val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL.lowercase() else ""
             when {
                 hardware.contains("qcom") || board.contains("msm") || soc.contains("snapdragon") -> "turnip"
-                hardware.contains("mt") || board.contains("mt") || soc.contains("mediatek") -> "virgl"
-                // ИСПРАВЛЕНО: Для всех неизвестных процессоров ОБЯЗАТЕЛЬНО virgl. Turnip вызовет черный экран.
                 else -> "virgl" 
             }
         } catch (e: Exception) {
-            "virgl" // ИСПРАВЛЕНО: При любой ошибке определения тоже откатываемся на virgl
+            "virgl"
         }
     }
 
@@ -299,10 +293,8 @@ class SplashActivity : AppCompatActivity() {
 
             val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
-                
-                // ИСПРАВЛЕНО: Явно запускаем Проводник Windows (explorer.exe). 
-                // Это не даст эмулятору завершить процесс и покажет рабочий стол.
-                putExtra("exec_path", "explorer.exe")
+                // АБСОЛЮТНЫЙ ПУТЬ ДЛЯ ЗАПУСКА: Запускаем проводник с полным путем, чтобы процесс не вылетал сразу.
+                putExtra("exec_path", "C:\\windows\\explorer.exe")
             }
             startActivity(intent)
             finish()
