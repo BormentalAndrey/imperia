@@ -43,16 +43,16 @@ class SplashActivity : AppCompatActivity() {
     
     private var isWorking = false
 
-    // ИСПРАВЛЕНО: Теперь базовая папка указывает на стандартную системную директорию Download/nfsu2
+    // ИСПРАВЛЕНО: Базовая папка, куда NFSDownloader помещает файлы
     private val baseGameDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "nfsu2")
     
-    // Функция для безопасного поиска файла без учета регистра букв (speed2.exe / SPEED2.EXE)
+    // ИСПРАВЛЕНО: Функция для безопасного поиска файла без учета регистра букв (speed2.exe / SPEED2.EXE)
     private fun getActualExeFile(): File? {
         if (!baseGameDir.exists() || !baseGameDir.isDirectory) return null
         return baseGameDir.listFiles()?.find { it.name.equals("SPEED2.EXE", ignoreCase = true) }
     }
 
-    // Переменные стали динамическими (get()). 
+    // ИСПРАВЛЕНО: Переменные стали динамическими (get()). 
     // Они подставляют реальное имя файла из системы и предотвращают ошибки "файл не найден".
     private val exeFile: File
         get() = getActualExeFile() ?: File(baseGameDir, "SPEED2.EXE")
@@ -220,7 +220,7 @@ class SplashActivity : AppCompatActivity() {
     }
 
     private suspend fun createContainerSynchronous(manager: ContainerManager): Container? = suspendCoroutine { cont ->
-        // ИСПРАВЛЕНО: Монтируем диск D на папку Download. Внутри Wine путь D:\nfsu2 будет вести в /Download/nfsu2
+        // FIXED: Mount drive D to the specific games folder
         val downloadsPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
         val drivesString = "D:$downloadsPath"
         
@@ -228,7 +228,8 @@ class SplashActivity : AppCompatActivity() {
             put("name", "NFS Underground 2")
             put("screenSize", "800x600")
             put("graphicsDriver", detectGraphicsDriver())
-            put("dxwrapper", "wined3d")
+            // ИСПРАВЛЕНО: Меняем старый wined3d на современный DXVK для устранения тихих вылетов
+            put("dxwrapper", "dxvk") 
             put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
             put("drives", drivesString)
         }
@@ -295,7 +296,7 @@ class SplashActivity : AppCompatActivity() {
                 startService(Intent(this, KeepAliveService::class.java))
             }
 
-            // ИСПРАВЛЕНО: Обратные слэши оставлены нетронутыми, они необходимы для корректной обработки внутри WinHandler/Wine
+            // FIXED: Do NOT replace backslashes. Wine/winhandler needs them.
             val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
                 putExtra("exec_path", gamePathOnD)
