@@ -43,16 +43,16 @@ class SplashActivity : AppCompatActivity() {
     
     private var isWorking = false
 
-    // ИСПРАВЛЕНО: Базовая папка, куда NFSDownloader помещает файлы
+    // Базовая папка, куда NFSDownloader помещает файлы
     private val baseGameDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "nfsu2")
     
-    // ИСПРАВЛЕНО: Функция для безопасного поиска файла без учета регистра букв (speed2.exe / SPEED2.EXE)
+    // Функция для безопасного поиска файла без учета регистра букв (speed2.exe / SPEED2.EXE)
     private fun getActualExeFile(): File? {
         if (!baseGameDir.exists() || !baseGameDir.isDirectory) return null
         return baseGameDir.listFiles()?.find { it.name.equals("SPEED2.EXE", ignoreCase = true) }
     }
 
-    // ИСПРАВЛЕНО: Переменные стали динамическими (get()). 
+    // Переменные стали динамическими (get()). 
     // Они подставляют реальное имя файла из системы и предотвращают ошибки "файл не найден".
     private val exeFile: File
         get() = getActualExeFile() ?: File(baseGameDir, "SPEED2.EXE")
@@ -220,7 +220,6 @@ class SplashActivity : AppCompatActivity() {
     }
 
     private suspend fun createContainerSynchronous(manager: ContainerManager): Container? = suspendCoroutine { cont ->
-        // FIXED: Mount drive D to the specific games folder
         val downloadsPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
         val drivesString = "D:$downloadsPath"
         
@@ -228,9 +227,10 @@ class SplashActivity : AppCompatActivity() {
             put("name", "NFS Underground 2")
             put("screenSize", "800x600")
             put("graphicsDriver", detectGraphicsDriver())
-            // ИСПРАВЛЕНО: Меняем старый wined3d на современный DXVK для устранения тихих вылетов
-            put("dxwrapper", "dxvk") 
-            put("envVars", "MESA_EXTENSION_MAX_YEAR=2003 MESA_GL_VERSION_OVERRIDE=4.5")
+            // ИСПРАВЛЕНО: Безопасный режим графики для теста
+            put("dxwrapper", "wined3d") 
+            // ИСПРАВЛЕНО: Убраны агрессивные флаги, которые крашили X-сервер
+            put("envVars", "") 
             put("drives", drivesString)
         }
 
@@ -249,10 +249,11 @@ class SplashActivity : AppCompatActivity() {
             when {
                 hardware.contains("qcom") || board.contains("msm") || soc.contains("snapdragon") -> "turnip"
                 hardware.contains("mt") || board.contains("mt") || soc.contains("mediatek") -> "virgl"
-                else -> "turnip"
+                // ИСПРАВЛЕНО: Для всех неизвестных процессоров ОБЯЗАТЕЛЬНО virgl. Turnip вызовет черный экран.
+                else -> "virgl" 
             }
         } catch (e: Exception) {
-            "turnip"
+            "virgl" // ИСПРАВЛЕНО: При любой ошибке определения тоже откатываемся на virgl
         }
     }
 
@@ -299,8 +300,9 @@ class SplashActivity : AppCompatActivity() {
             val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
                 
-                // ВРЕМЕННО ОТКЛЮЧЕНО ДЛЯ ДЕБАГА:
-                // putExtra("exec_path", gamePathOnD)
+                // ИСПРАВЛЕНО: Явно запускаем Проводник Windows (explorer.exe). 
+                // Это не даст эмулятору завершить процесс и покажет рабочий стол.
+                putExtra("exec_path", "explorer.exe")
             }
             startActivity(intent)
             finish()
