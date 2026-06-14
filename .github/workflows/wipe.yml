@@ -1,0 +1,29 @@
+name: Wipe Repository
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  delete-everything:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Delete all files and commit
+        run: |
+          # Удаляем все файлы
+          git rm -rf .
+          
+          # Настраиваем бота для коммита
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Создаем коммит очистки
+          git commit -m "🚨 Полная очистка репозитория" || echo "Репозиторий уже пуст"
+          
+          # Пушим изменения в репозиторий
+          git push
