@@ -1,0 +1,35 @@
+name: Build Winlator APK
+
+on:
+  workflow_dispatch: # Кнопка ручного запуска во вкладке Actions
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        # submodules больше не нужны, так как все файлы уже у тебя
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17' # Версия Java, необходимая для сборки Winlator
+          distribution: 'zulu'
+          cache: gradle # Кэширование ускорит последующие сборки
+
+      - name: Make gradlew executable
+        working-directory: ./app
+        run: chmod +x ./gradlew
+
+      - name: Build APK (Debug)
+        working-directory: ./app
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: winlator-custom-debug
+          # Путь внутри твоей структуры: папка app -> модуль app -> build...
+          path: app/app/build/outputs/apk/debug/*.apk
