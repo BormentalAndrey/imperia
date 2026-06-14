@@ -177,7 +177,8 @@ class SplashActivity : AppCompatActivity() {
                 }
 
                 val containerManager = ContainerManager(this@SplashActivity)
-                var container = containerManager.containers.find { it.name == "NFS Underground 2" }
+                // ИСПРАВЛЕНО: Меняем имя контейнера, чтобы форсировать создание новой конфигурации для Mali
+                var container = containerManager.containers.find { it.name == "NFS Underground 2 Mali" }
 
                 if (container == null) {
                     withContext(Dispatchers.Main) {
@@ -220,12 +221,12 @@ class SplashActivity : AppCompatActivity() {
         val drivesString = "D:$downloadsPath"
         
         val data = JSONObject().apply {
-            put("name", "NFS Underground 2")
+            // ИСПРАВЛЕНО: Применяем новое уникальное имя контейнера
+            put("name", "NFS Underground 2 Mali")
             put("screenSize", "800x600")
-            // ЖЕСТКО для MediaTek/Mali: только virgl работает.
             put("graphicsDriver", "virgl") 
             put("dxwrapper", "wined3d") 
-            // СПАСАТЕЛЬНЫЕ ФЛАГИ ДЛЯ MALI: без них wined3d крашится.
+            // ХАК ДЛЯ MALI: Подменяем версию OpenGL внутри Wine среды
             put("envVars", "MESA_GL_VERSION_OVERRIDE=4.0 MESA_GLSL_VERSION_OVERRIDE=400") 
             put("drives", drivesString)
         }
@@ -293,8 +294,9 @@ class SplashActivity : AppCompatActivity() {
 
             val intent = Intent(this, XServerDisplayActivity::class.java).apply {
                 putExtra("container_id", container.id)
-                // АБСОЛЮТНЫЙ ПУТЬ ДЛЯ ЗАПУСКА: Запускаем проводник с полным путем, чтобы процесс не вылетал сразу.
-                putExtra("exec_path", "C:\\windows\\explorer.exe")
+                // ИСПРАВЛЕНО: Используем стандартный вызов explorer.exe.
+                // Это заставит Wine корректно инициализировать рабочий стол.
+                putExtra("exec_path", "explorer.exe")
             }
             startActivity(intent)
             finish()
