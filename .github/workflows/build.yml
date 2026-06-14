@@ -1,7 +1,7 @@
 name: Build Winlator APK
 
 on:
-  workflow_dispatch: # Кнопка ручного запуска во вкладке Actions
+  workflow_dispatch:
 
 jobs:
   build:
@@ -10,18 +10,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        # submodules больше не нужны, так как все файлы уже у тебя
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '17' # Версия Java, необходимая для сборки Winlator
+          java-version: '17'
           distribution: 'zulu'
-          cache: gradle # Кэширование ускорит последующие сборки
+          cache: gradle
 
       - name: Make gradlew executable
         working-directory: ./app
         run: chmod +x ./gradlew
+
+      # НОВЫЙ ШАГ: Устанавливаем нужную версию CMake через Android SDK Manager
+      - name: Install CMake 3.22.1
+        run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "cmake;3.22.1"
 
       - name: Build APK (Debug)
         working-directory: ./app
@@ -31,5 +34,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: winlator-custom-debug
-          # Путь внутри твоей структуры: папка app -> модуль app -> build...
           path: app/app/build/outputs/apk/debug/*.apk
