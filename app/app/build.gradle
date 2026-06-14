@@ -11,6 +11,11 @@ android {
         versionName "11.1"
     }
 
+    // Тот самый блок для решения проблемы Duplicate files (libFLAC.so и других)
+    packagingOptions {
+        pickFirst '**/*.so'
+    }
+
     buildTypes {
         debug {
             minifyEnabled true
