@@ -1,0 +1,43 @@
+name: Physical Import Winlator
+
+on:
+  workflow_dispatch: # Кнопка ручного запуска
+
+permissions:
+  contents: write # Разрешение на запись кода в твой репозиторий
+
+jobs:
+  import-files:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout your repository
+        uses: actions/checkout@v4
+
+      - name: Physically copy Winlator files
+        run: |
+          # 1. Настраиваем Git-бота
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 2. Очищаем твой репозиторий (удаляем всё, кроме служебной папки .git и .github)
+          echo "🧹 Очистка старых файлов и папок..."
+          find . -maxdepth 1 ! -name '.' ! -name '.git' ! -name '.github' -exec rm -rf {} +
+          
+          # 3. Клонируем официальный Winlator со всеми скрытыми зависимостями во временную папку
+          echo "📥 Скачивание оригинального Winlator со всеми сабмодулями..."
+          git clone --recursive https://github.com/brunodev85/winlator.git temp_official
+          
+          # 4. Копируем файлы через rsync, отсекая скрытые .git-линки.
+          # Это превратит папки-ссылки в обычные физические папки с кодом на твоем аккаунте.
+          echo "📂 Превращение ссылок в реальные папки и файлы..."
+          rsync -av --exclude='.git' temp_official/ .
+          
+          # 5. Вычищаем мусор
+          rm -rf temp_official
+          rm -f .gitmodules
+          
+          # 6. Добавляем файлы как родные, коммитим и жестко пушим в твою ветку
+          echo "📤 Отправка «чистых» файлов в твой репозиторий..."
+          git add -A
+          git commit -m "🚀 Полный физический перенос Winlator без сабмодулей" || echo "Изменений не обнаружено"
+          git push origin HEAD --force
