@@ -30,6 +30,7 @@ import com.winlator.core.AppUtils;
 import com.winlator.core.Callback;
 import com.winlator.core.LocaleHelper;
 import com.winlator.core.PreloaderDialog;
+import com.winlator.xenvironment.RootFS;
 import com.winlator.xenvironment.RootFSInstaller;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
@@ -79,6 +80,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             actionBar.setHomeAsUpIndicator(R.drawable.icon_action_bar_menu);
             onNavigationItemSelected(navigationView.getMenu().findItem(menuItemId));
             navigationView.setCheckedItem(menuItemId);
+            
             if (!requestAppPermissions()) RootFSInstaller.installIfNeeded(this);
 
             int containerId = intent.getIntExtra("container_id", 0);
@@ -86,6 +88,30 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             if (containerId > 0 && startPath != null) {
                 showFragment(new ContainerFileManagerFragment(containerId, startPath));
             }
+        }
+
+        // Блок автоматизации: перехватываем запрос на фоновую установку RootFS из SplashActivity
+        if (getIntent().getBooleanExtra("SETUP_ROOTFS_AND_RETURN", false)) {
+            new Thread(() -> {
+                while (true) {
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        break;
+                    }
+                    RootFS rootFS = RootFS.find(MainActivity.this);
+                    if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
+                        runOnUiThread(() -> {
+                            // Очищаем стек и возвращаемся к нашей точке входа
+                            Intent intentSplash = new Intent(MainActivity.this, SplashActivity.class);
+                            intentSplash.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(intentSplash);
+                            finish();
+                        });
+                        break;
+                    }
+                }
+            }).start();
         }
     }
 
