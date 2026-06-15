@@ -159,25 +159,19 @@ public class SplashActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 RootFS rootFS = RootFS.find(SplashActivity.this);
+                // Если RootFS не готова, делегируем установку в MainActivity и ожидаем возврата
                 if (rootFS == null || !rootFS.isValid() || rootFS.getVersion() < RootFSInstaller.LATEST_VERSION) {
                     runOnUiThread(() -> {
-                        statusText.setText("Распаковка базовой системы (занимает время)...");
+                        statusText.setText("Инициализация базовой системы...");
                         progressBar.setIndeterminate(true);
                         progressBar.setVisibility(View.VISIBLE);
-                        RootFSInstaller.installIfNeeded(SplashActivity.this);
+                        
+                        Intent intent = new Intent(SplashActivity.this, MainActivity.class);
+                        intent.putExtra("SETUP_ROOTFS_AND_RETURN", true);
+                        startActivity(intent);
+                        finish();
                     });
-                    
-                    while (true) {
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            break;
-                        }
-                        rootFS = RootFS.find(SplashActivity.this);
-                        if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
-                            break;
-                        }
-                    }
+                    return; // Завершаем текущий поток, MainActivity вернет нас обратно
                 }
 
                 runOnUiThread(() -> statusText.setText("Проверка контейнера..."));
