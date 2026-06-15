@@ -164,11 +164,19 @@ public class SplashActivity extends AppCompatActivity {
                         statusText.setText("Распаковка базовой системы (занимает время)...");
                         progressBar.setIndeterminate(true);
                         progressBar.setVisibility(View.VISIBLE);
+                        RootFSInstaller.installIfNeeded(SplashActivity.this);
                     });
                     
-                    boolean success = RootFSInstaller.installSynchronous(SplashActivity.this);
-                    if (!success) {
-                        throw new Exception("Не удалось распаковать rootfs.tzst");
+                    while (true) {
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException e) {
+                            break;
+                        }
+                        rootFS = RootFS.find(SplashActivity.this);
+                        if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
+                            break;
+                        }
                     }
                 }
 
@@ -296,8 +304,7 @@ public class SplashActivity extends AppCompatActivity {
 
             Intent intent = new Intent(this, XServerDisplayActivity.class);
             intent.putExtra("container_id", container.id);
-            // Пока оставлен explorer.exe для тестов.
-            intent.putExtra("exec_path", "explorer.exe");
+            intent.putExtra("exec_path", "D:\\nfsu2\\SPEED2.EXE");
             
             startActivity(intent);
             finish();
