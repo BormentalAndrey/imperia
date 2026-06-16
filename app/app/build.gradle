@@ -1,26 +1,39 @@
-apply plugin: 'com.android.application'
+plugins {
+    id 'com.android.application'
+}
 
 android {
+    // Указываем namespace здесь (современный стандарт вместо package в манифесте)
+    namespace 'com.winlator'
     compileSdk 34
 
     defaultConfig {
         applicationId 'com.winlator'
         minSdkVersion 26
-        targetSdkVersion 28
+        // КРИТИЧНО: Поднимаем target до 34, чтобы Android 14/15 корректно выдавал права
+        // и правильно обрабатывал foreground-сервисы.
+        targetSdkVersion 34 
         versionCode 28
         versionName "11.1"
     }
 
-    // Тот самый блок для решения проблемы Duplicate files (libFLAC.so и других)
+    // Решение проблемы Duplicate files
     packagingOptions {
         pickFirst '**/*.so'
     }
 
     buildTypes {
-        debug {
+        // Добавлен профиль для релизной сборки
+        release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-
+            ndk {
+                abiFilters 'arm64-v8a'
+            }
+        }
+        // В debug отключаем минификацию, чтобы видеть нормальные стектрейсы при крашах
+        debug {
+            minifyEnabled false 
             ndk {
                 abiFilters 'arm64-v8a'
             }
