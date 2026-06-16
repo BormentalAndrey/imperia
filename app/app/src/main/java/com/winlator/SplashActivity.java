@@ -195,20 +195,12 @@ public class SplashActivity extends AppCompatActivity {
 
                 final Container finalContainer = targetContainer;
 
-                if (getExeFile().exists() || downloader.isGameInstalled()) {
-                    runOnUiThread(() -> {
-                        statusText.setText("Запуск игры...");
-                        launchGame(finalContainer);
-                    });
-                } else {
-                    runOnUiThread(() -> {
-                        statusText.setText("Игра не найдена. Скачайте файлы.");
-                        progressBar.setVisibility(View.GONE);
-                        actionButton.setText("СКАЧАТЬ ИГРУ");
-                        actionButton.setVisibility(View.VISIBLE);
-                        isWorking = false;
-                    });
-                }
+                // ВСЕГДА запускаем контейнер (рабочий стол)
+                // Игра запускается пользователем вручную из контейнера
+                runOnUiThread(() -> {
+                    statusText.setText("Запуск контейнера...");
+                    launchContainer(finalContainer);
+                });
 
             } catch (Exception e) {
                 Log.e("SplashActivity", "Initialization Error", e);
@@ -287,7 +279,10 @@ public class SplashActivity extends AppCompatActivity {
         );
     }
 
-    private void launchGame(Container container) {
+    /**
+     * Запускает контейнер с рабочим столом (без автозапуска игры)
+     */
+    private void launchContainer(Container container) {
         try {
             Intent serviceIntent = new Intent(this, KeepAliveService.class);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -296,15 +291,17 @@ public class SplashActivity extends AppCompatActivity {
                 startService(serviceIntent);
             }
 
+            // Запускаем ТОЛЬКО контейнер, без exec_path
+            // Пользователь увидит рабочий стол и сам запустит игру
             Intent intent = new Intent(this, XServerDisplayActivity.class);
             intent.putExtra("container_id", container.id);
-            intent.putExtra("exec_path", "D:\\nfsu2\\SPEED2.EXE");
+            // exec_path НЕ передаём!
             
             startActivity(intent);
             finish();
 
         } catch (Exception e) {
-            Log.e("SplashActivity", "Ошибка запуска", e);
+            Log.e("SplashActivity", "Ошибка запуска контейнера", e);
             Toast.makeText(this, "Ошибка: " + e.getMessage(), Toast.LENGTH_LONG).show();
             isWorking = false;
         }
