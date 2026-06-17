@@ -105,12 +105,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         RootFS rootFS = RootFS.find(this);
         if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
-            Log.d(TAG, "RootFS ready, proceeding to container setup");
-            onEnvironmentReady(intent);
+            onEnvironmentReady();
             return;
         }
 
-        Log.d(TAG, "RootFS needs installation, starting...");
         RootFSInstaller.installIfNeeded(this);
 
         new Thread(() -> {
@@ -123,33 +121,20 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
                 RootFS currentRootFS = RootFS.find(MainActivity.this);
                 if (currentRootFS != null && currentRootFS.isValid() && currentRootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
-                    Log.d(TAG, "RootFS installation completed after " + attempts + " seconds");
-                    runOnUiThread(() -> onEnvironmentReady(intent));
+                    runOnUiThread(() -> onEnvironmentReady());
                     return;
                 }
                 attempts++;
             }
-            Log.e(TAG, "RootFS installation timeout");
-            runOnUiThread(() -> {
-                isAppReady = true;
-            });
+            runOnUiThread(() -> isAppReady = true);
         }).start();
     }
 
-    private void onEnvironmentReady(Intent intent) {
-        int containerId = intent.getIntExtra("container_id", 0);
-        String startPath = intent.getStringExtra("start_path");
-        
-        if (containerId > 0) {
-            launchContainer(containerId, startPath);
-            return;
-        }
-
+    private void onEnvironmentReady() {
         ContainerManager containerManager = new ContainerManager(this);
-        ArrayList<Container> containers = containerManager.getContainers();
         Container targetContainer = null;
 
-        for (Container c : containers) {
+        for (Container c : containerManager.getContainers()) {
             if (CONTAINER_NAME.equals(c.getName())) {
                 targetContainer = c;
                 break;
@@ -157,16 +142,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
 
         if (targetContainer != null) {
-            launchContainer(targetContainer.id, startPath);
+            launchContainer(targetContainer.id);
         } else {
-            createAndLaunchContainerAsync(containerManager, startPath);
+            createAndLaunchContainer(containerManager);
         }
     }
 
-    private void createAndLaunchContainerAsync(ContainerManager containerManager, String startPath) {
+    private void createAndLaunchContainer(ContainerManager containerManager) {
         try {
-            Log.d(TAG, "Creating " + CONTAINER_NAME + " container asynchronously...");
-            
             JSONObject data = new JSONObject();
             data.put("name", CONTAINER_NAME);
             data.put("screenSize", "800x600");
@@ -184,41 +167,32 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             containerManager.createContainerAsync(data, container -> {
                 runOnUiThread(() -> {
                     if (container != null) {
-                        Log.d(TAG, "Container created successfully. ID: " + container.id);
-                        launchContainer(container.id, startPath);
+                        launchContainer(container.id);
                     } else {
-                        Log.e(TAG, "Failed to create container object");
                         isAppReady = true;
                     }
                 });
             });
         } catch (Exception e) {
-            Log.e(TAG, "Failed to build container configuration JSON", e);
+            Log.e(TAG, "JSON error", e);
             isAppReady = true;
         }
     }
 
-    private void launchContainer(int containerId, String startPath) {
+    private void launchContainer(int containerId) {
         ContainerManager cm = new ContainerManager(this);
         Container container = cm.getContainerById(containerId);
 
         if (container == null) {
-            Log.e(TAG, "Container not found for ID: " + containerId);
             isAppReady = true;
             return;
         }
 
-        // Единоразовая активация контейнера
         cm.activateContainer(container);
 
         Intent xServerIntent = new Intent(this, XServerDisplayActivity.class);
         xServerIntent.putExtra("container_id", containerId);
         
-        // Если startPath не передан — используем дефолтный путь к игре
-        String gameExePath = (startPath != null && !startPath.isEmpty()) ? startPath : "D:\\nfsu2\\SPEED2.EXE";
-        xServerIntent.putExtra("start_path", gameExePath);
-        
-        Log.d(TAG, "Starting XServerDisplayActivity with container " + containerId + " and path: " + gameExePath);
         startActivity(xServerIntent);
         
         isAppReady = true;
@@ -236,8 +210,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (requestCode == PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 initEnvironment(getIntent());
+            } else {
+                finish();
             }
-            else finish();
         }
     }
 
@@ -256,8 +231,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             }
         }
         
-        if (requestCode == MainActivity.OPEN_FILE_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            if (openFileCallback != null) {
+        if (requestCode == OPEN_FILE_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
+            if (openFileCallback != null && data != null) {
                 openFileCallback.call(data.getData());
                 openFileCallback = null;
             }
@@ -268,7 +243,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         if ((newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE ||
-            newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) && currentFragment instanceof BaseFileManagerFragment) {
+            newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) && 
+            currentFragment instanceof BaseFileManagerFragment) {
             ((BaseFileManagerFragment)currentFragment).onOrientationChanged();
         }
     }
@@ -277,14 +253,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void onBackPressed() {
         if (currentFragment != null && currentFragment.isVisible()) {
             if (currentFragment instanceof BaseFileManagerFragment) {
-                BaseFileManagerFragment fileManagerFragment = (BaseFileManagerFragment)currentFragment;
-                if (fileManagerFragment.onBackPressed()) return;
-            }
-            else if (currentFragment instanceof ContainersFragment) {
+                if (((BaseFileManagerFragment)currentFragment).onBackPressed()) return;
+            } else if (currentFragment instanceof ContainersFragment) {
                 finish();
             }
         }
-
         showFragment(new ContainersFragment());
     }
 
@@ -299,25 +272,23 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 try {
                     Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
                     intent.addCategory("android.intent.category.DEFAULT");
-                    intent.setData(Uri.parse(String.format("package:%s", getApplicationContext().getPackageName())));
+                    intent.setData(Uri.parse("package:" + getPackageName()));
                     startActivityForResult(intent, PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE);
                 } catch (Exception e) {
-                    Intent intent = new Intent();
-                    intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
                     startActivityForResult(intent, PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE);
                 }
                 return true;
             }
             return false;
-        } 
-        else {
+        } else {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
                 ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
                 return false;
             }
-
-            String[] permissions = new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE};
-            ActivityCompat.requestPermissions(this, permissions, PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE);
+            ActivityCompat.requestPermissions(this, 
+                new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE},
+                PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE);
             return true;
         }
     }
@@ -325,21 +296,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     public boolean onOptionsItemSelected(MenuItem menuItem) {
         int itemId = menuItem.getItemId();
-        if (itemId == R.id.menu_item_add ||
-            itemId == R.id.menu_item_home ||
-            itemId == R.id.menu_item_view_style ||
-            itemId == R.id.menu_item_new_folder) {
+        if (itemId == R.id.menu_item_add || itemId == R.id.menu_item_home ||
+            itemId == R.id.menu_item_view_style || itemId == R.id.menu_item_new_folder) {
             return super.onOptionsItemSelected(menuItem);
-        }
-        else {
+        } else {
             if (editInputControls) {
                 setResult(RESULT_OK);
                 finish();
-            }
-            else {
-                if (currentFragment instanceof BaseFileManagerFragment) {
-                    BaseFileManagerFragment fileManagerFragment = (BaseFileManagerFragment)currentFragment;
-                    if (fileManagerFragment.onOptionsMenuClicked()) return true;
+            } else {
+                if (currentFragment instanceof BaseFileManagerFragment &&
+                    ((BaseFileManagerFragment)currentFragment).onOptionsMenuClicked()) {
+                    return true;
                 }
                 drawerLayout.openDrawer(GravityCompat.START);
             }
@@ -349,39 +316,33 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     @Override
     public boolean onNavigationItemSelected(@NonNull MenuItem item) {
-        FragmentManager fragmentManager = getSupportFragmentManager();
-        if (fragmentManager.getBackStackEntryCount() > 0) {
-            fragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+        FragmentManager fm = getSupportFragmentManager();
+        if (fm.getBackStackEntryCount() > 0) {
+            fm.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
         }
 
-        switch (item.getItemId()) {
-            case R.id.menu_item_shortcuts:
-                preferences.edit().putBoolean("show_shortcuts_first", true).apply();
-                showFragment(new ShortcutsFragment());
-                break;
-            case R.id.menu_item_containers:
-                preferences.edit().putBoolean("show_shortcuts_first", false).apply();
-                showFragment(new ContainersFragment());
-                break;
-            case R.id.menu_item_input_controls:
-                showFragment(new InputControlsFragment(selectedProfileId));
-                break;
-            case R.id.menu_item_settings:
-                showFragment(new SettingsFragment());
-                break;
-            case R.id.menu_item_about:
-                (new AboutDialog(this)).show();
-                break;
+        int itemId = item.getItemId();
+        if (itemId == R.id.menu_item_shortcuts) {
+            preferences.edit().putBoolean("show_shortcuts_first", true).apply();
+            showFragment(new ShortcutsFragment());
+        } else if (itemId == R.id.menu_item_containers) {
+            preferences.edit().putBoolean("show_shortcuts_first", false).apply();
+            showFragment(new ContainersFragment());
+        } else if (itemId == R.id.menu_item_input_controls) {
+            showFragment(new InputControlsFragment(selectedProfileId));
+        } else if (itemId == R.id.menu_item_settings) {
+            showFragment(new SettingsFragment());
+        } else if (itemId == R.id.menu_item_about) {
+            new AboutDialog(this).show();
         }
         return true;
     }
 
     public void showFragment(Fragment fragment) {
-        FragmentManager fragmentManager = getSupportFragmentManager();
-        fragmentManager.beginTransaction()
+        FragmentManager fm = getSupportFragmentManager();
+        fm.beginTransaction()
             .replace(R.id.FLFragmentContainer, fragment)
             .commit();
-
         drawerLayout.closeDrawer(GravityCompat.START);
         currentFragment = fragment;
     }
