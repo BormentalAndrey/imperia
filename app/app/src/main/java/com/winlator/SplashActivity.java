@@ -56,6 +56,15 @@ public class SplashActivity extends AppCompatActivity {
         return new File(baseGameDir, "SPEED2.EXE");
     }
 
+    // Лаунчер сработает корректно, если MainActivity вызовет setResult(...) и finish()
+    private final ActivityResultLauncher<Intent> rootFSLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                isWorking = false;
+                startInitializationFlow();
+            }
+    );
+
     private final ActivityResultLauncher<Intent> storagePermissionLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -159,8 +168,14 @@ public class SplashActivity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 RootFS rootFS = RootFS.find(SplashActivity.this);
-                // Если RootFS не готова, делегируем установку в MainActivity и ожидаем возврата
-                if (rootFS == null || !rootFS.isValid() || rootFS.getVersion() < RootFSInstaller.LATEST_VERSION) {
+                
+                // Дебаг-логи для проверки состояния RootFS
+                Log.d("NFS_DEBUG", "rootDir=" + rootFS.getRootDir());
+                Log.d("NFS_DEBUG", "valid=" + rootFS.isValid());
+                Log.d("NFS_DEBUG", "version=" + rootFS.getVersion());
+
+                // Убрана лишняя проверка на null
+                if (!rootFS.isValid() || rootFS.getVersion() < RootFSInstaller.LATEST_VERSION) {
                     runOnUiThread(() -> {
                         statusText.setText("Инициализация базовой системы...");
                         progressBar.setIndeterminate(true);
@@ -168,10 +183,9 @@ public class SplashActivity extends AppCompatActivity {
                         
                         Intent intent = new Intent(SplashActivity.this, MainActivity.class);
                         intent.putExtra("SETUP_ROOTFS_AND_RETURN", true);
-                        startActivity(intent);
-                        finish();
+                        rootFSLauncher.launch(intent);
                     });
-                    return; // Завершаем текущий поток, MainActivity вернет нас обратно
+                    return; 
                 }
 
                 runOnUiThread(() -> statusText.setText("Проверка контейнера..."));
@@ -187,6 +201,7 @@ public class SplashActivity extends AppCompatActivity {
 
                 if (targetContainer == null) {
                     runOnUiThread(() -> statusText.setText("Создание среды..."));
+                    Log.d("NFS_DEBUG", "Creating container...");
                     targetContainer = createContainerSynchronous(containerManager);
                     if (targetContainer == null) {
                          throw new Exception("Ошибка создания контейнера");
@@ -195,10 +210,9 @@ public class SplashActivity extends AppCompatActivity {
 
                 final Container finalContainer = targetContainer;
 
-                // ВСЕГДА запускаем контейнер (рабочий стол)
-                // Игра запускается пользователем вручную из контейнера
                 runOnUiThread(() -> {
                     statusText.setText("Запуск контейнера...");
+                    Log.d("NFS_DEBUG", "Launching container id=" + finalContainer.id);
                     launchContainer(finalContainer);
                 });
 
@@ -232,6 +246,7 @@ public class SplashActivity extends AppCompatActivity {
         manager.createContainerAsync(data, new Callback<Container>() {
             @Override
             public void call(Container container) {
+                Log.d("NFS_DEBUG", "Container callback: " + container);
                 synchronized (lock) {
                     result[0] = container;
                     lock.notify();
@@ -241,9 +256,15 @@ public class SplashActivity extends AppCompatActivity {
 
         synchronized (lock) {
             if (result[0] == null) {
-                lock.wait();
+                // Добавлен таймаут на 30 секунд, чтобы избежать вечного зависания потока
+                lock.wait(30000); 
             }
         }
+        
+        if (result[0] == null) {
+            throw new Exception("Container creation timeout");
+        }
+        
         return result[0];
     }
 
@@ -279,9 +300,6 @@ public class SplashActivity extends AppCompatActivity {
         );
     }
 
-    /**
-     * Запускает контейнер с рабочим столом (без автозапуска игры)
-     */
     private void launchContainer(Container container) {
         try {
             Intent serviceIntent = new Intent(this, KeepAliveService.class);
@@ -291,13 +309,13 @@ public class SplashActivity extends AppCompatActivity {
                 startService(serviceIntent);
             }
 
-            // Запускаем ТОЛЬКО контейнер, без exec_path
-            // Пользователь увидит рабочий стол и сам запустит игру
             Intent intent = new Intent(this, XServerDisplayActivity.class);
             intent.putExtra("container_id", container.id);
-            // exec_path НЕ передаём!
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             
             startActivity(intent);
+            
+            // Возвращаем finish()
             finish();
 
         } catch (Exception e) {
