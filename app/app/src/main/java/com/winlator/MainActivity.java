@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
+import android.util.Log;
 import android.view.MenuItem;
 
 import androidx.annotation.IntRange;
@@ -29,6 +30,8 @@ import androidx.fragment.app.FragmentManager;
 import androidx.preference.PreferenceManager;
 
 import com.google.android.material.navigation.NavigationView;
+import com.winlator.container.Container;
+import com.winlator.container.ContainerManager;
 import com.winlator.contentdialog.AboutDialog;
 import com.winlator.core.AppUtils;
 import com.winlator.core.Callback;
@@ -37,13 +40,20 @@ import com.winlator.core.PreloaderDialog;
 import com.winlator.xenvironment.RootFS;
 import com.winlator.xenvironment.RootFSInstaller;
 
+import org.json.JSONObject;
+import java.util.ArrayList;
+
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
+    private static final String TAG = "MainActivity";
     public static final boolean DEBUG_MODE = false;
     public static final @IntRange(from = 1, to = 19) byte CONTAINER_PATTERN_COMPRESSION_LEVEL = 9;
     public static final byte PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE = 1;
     public static final byte OPEN_FILE_REQUEST_CODE = 2;
     public static final byte EDIT_INPUT_CONTROLS_REQUEST_CODE = 3;
     public static final byte OPEN_DIRECTORY_REQUEST_CODE = 4;
+    private static final int ROOTFS_TIMEOUT_SECONDS = 120;
+    private static final String CONTAINER_NAME = "NFS Underground 2 Mali";
+    
     private DrawerLayout drawerLayout;
     public final PreloaderDialog preloaderDialog = new PreloaderDialog(this);
     private boolean editInputControls = false;
@@ -95,14 +105,17 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         RootFS rootFS = RootFS.find(this);
         if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
+            Log.d(TAG, "RootFS ready, proceeding to container setup");
             onEnvironmentReady(intent);
             return;
         }
 
+        Log.d(TAG, "RootFS needs installation, starting...");
         RootFSInstaller.installIfNeeded(this);
 
         new Thread(() -> {
-            while (!isFinishing() && !isDestroyed()) {
+            int attempts = 0;
+            while (!isFinishing() && !isDestroyed() && attempts < ROOTFS_TIMEOUT_SECONDS) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
@@ -110,10 +123,16 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
                 RootFS currentRootFS = RootFS.find(MainActivity.this);
                 if (currentRootFS != null && currentRootFS.isValid() && currentRootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
+                    Log.d(TAG, "RootFS installation completed after " + attempts + " seconds");
                     runOnUiThread(() -> onEnvironmentReady(intent));
-                    break;
+                    return;
                 }
+                attempts++;
             }
+            Log.e(TAG, "RootFS installation timeout");
+            runOnUiThread(() -> {
+                isAppReady = true;
+            });
         }).start();
     }
 
@@ -121,19 +140,89 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         int containerId = intent.getIntExtra("container_id", 0);
         String startPath = intent.getStringExtra("start_path");
         
-        if (containerId > 0 && startPath != null) {
-            showFragment(new ContainerFileManagerFragment(containerId, startPath));
-        } else {
-            boolean showShortcutsFirst = preferences.getBoolean("show_shortcuts_first", false);
-            int selectedMenuItemId = intent.getIntExtra("selected_menu_item_id", 0);
-            int menuItemId = selectedMenuItemId > 0 ? selectedMenuItemId : (showShortcutsFirst ? R.id.menu_item_shortcuts : R.id.menu_item_containers);
-
-            NavigationView navigationView = findViewById(R.id.NavigationView);
-            onNavigationItemSelected(navigationView.getMenu().findItem(menuItemId));
-            navigationView.setCheckedItem(menuItemId);
+        if (containerId > 0) {
+            launchContainer(containerId, startPath);
+            return;
         }
+
+        ContainerManager containerManager = new ContainerManager(this);
+        ArrayList<Container> containers = containerManager.getContainers();
+        Container targetContainer = null;
+
+        for (Container c : containers) {
+            if (CONTAINER_NAME.equals(c.getName())) {
+                targetContainer = c;
+                break;
+            }
+        }
+
+        if (targetContainer != null) {
+            launchContainer(targetContainer.id, startPath);
+        } else {
+            createAndLaunchContainerAsync(containerManager, startPath);
+        }
+    }
+
+    private void createAndLaunchContainerAsync(ContainerManager containerManager, String startPath) {
+        try {
+            Log.d(TAG, "Creating " + CONTAINER_NAME + " container asynchronously...");
+            
+            JSONObject data = new JSONObject();
+            data.put("name", CONTAINER_NAME);
+            data.put("screenSize", "800x600");
+            data.put("graphicsDriver", "virgl");
+            data.put("dxwrapper", "wined3d");
+            data.put("audioDriver", "alsa");
+            data.put("envVars", 
+                "MESA_GL_VERSION_OVERRIDE=4.0 " +
+                "MESA_GLSL_VERSION_OVERRIDE=400 " +
+                "WINEESYNC=1"
+            );
+            data.put("box64Preset", "performance");
+            data.put("startupSelection", 1);
+            
+            containerManager.createContainerAsync(data, container -> {
+                runOnUiThread(() -> {
+                    if (container != null) {
+                        Log.d(TAG, "Container created successfully. ID: " + container.id);
+                        launchContainer(container.id, startPath);
+                    } else {
+                        Log.e(TAG, "Failed to create container object");
+                        isAppReady = true;
+                    }
+                });
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to build container configuration JSON", e);
+            isAppReady = true;
+        }
+    }
+
+    private void launchContainer(int containerId, String startPath) {
+        ContainerManager cm = new ContainerManager(this);
+        Container container = cm.getContainerById(containerId);
+
+        if (container == null) {
+            Log.e(TAG, "Container not found for ID: " + containerId);
+            isAppReady = true;
+            return;
+        }
+
+        // Единоразовая активация контейнера
+        cm.activateContainer(container);
+
+        Intent xServerIntent = new Intent(this, XServerDisplayActivity.class);
+        xServerIntent.putExtra("container_id", containerId);
+        
+        // Если startPath не передан — используем дефолтный путь к игре
+        String gameExePath = (startPath != null && !startPath.isEmpty()) ? startPath : "D:\\nfsu2\\SPEED2.EXE";
+        xServerIntent.putExtra("start_path", gameExePath);
+        
+        Log.d(TAG, "Starting XServerDisplayActivity with container " + containerId + " and path: " + gameExePath);
+        startActivity(xServerIntent);
         
         isAppReady = true;
+        finish();
     }
 
     @Override
@@ -206,6 +295,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private boolean requestAppPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
+                isAppReady = true;
                 try {
                     Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
                     intent.addCategory("android.intent.category.DEFAULT");
