@@ -8,7 +8,10 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.Settings;
 import android.view.MenuItem;
 
 import androidx.annotation.IntRange;
@@ -18,6 +21,7 @@ import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.splashscreen.SplashScreen;
 import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
@@ -34,7 +38,7 @@ import com.winlator.xenvironment.RootFS;
 import com.winlator.xenvironment.RootFSInstaller;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
-    public static final boolean DEBUG_MODE = false; // FIXME change to false
+    public static final boolean DEBUG_MODE = false;
     public static final @IntRange(from = 1, to = 19) byte CONTAINER_PATTERN_COMPRESSION_LEVEL = 9;
     public static final byte PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE = 1;
     public static final byte OPEN_FILE_REQUEST_CODE = 2;
@@ -47,9 +51,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private Callback<Uri> openFileCallback;
     private SharedPreferences preferences;
     private Fragment currentFragment;
+    private boolean isAppReady = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        SplashScreen splashScreen = SplashScreen.installSplashScreen(this);
+        splashScreen.setKeepOnScreenCondition(() -> !isAppReady);
+        
         AppUtils.setActivityTheme(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main_activity);
@@ -66,53 +74,53 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         Intent intent = getIntent();
         editInputControls = intent.getBooleanExtra("edit_input_controls", false);
+        
         if (editInputControls) {
             selectedProfileId = intent.getIntExtra("selected_profile_id", 0);
             actionBar.setHomeAsUpIndicator(R.drawable.icon_action_bar_back);
             onNavigationItemSelected(navigationView.getMenu().findItem(R.id.menu_item_input_controls));
             navigationView.setCheckedItem(R.id.menu_item_input_controls);
+            isAppReady = true;
         }
         else {
+            actionBar.setHomeAsUpIndicator(R.drawable.icon_action_bar_menu);
+            initEnvironment(intent);
+        }
+    }
+
+    private void initEnvironment(Intent intent) {
+        if (requestAppPermissions()) {
+            return;
+        }
+
+        RootFS rootFS = RootFS.find(this);
+        if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
+            onEnvironmentReady(intent);
+            return;
+        }
+
+        RootFSInstaller.installIfNeeded(this, () -> {
+            runOnUiThread(() -> onEnvironmentReady(intent));
+        });
+    }
+
+    private void onEnvironmentReady(Intent intent) {
+        int containerId = intent.getIntExtra("container_id", 0);
+        String startPath = intent.getStringExtra("start_path");
+        
+        if (containerId > 0 && startPath != null) {
+            showFragment(new ContainerFileManagerFragment(containerId, startPath));
+        } else {
             boolean showShortcutsFirst = preferences.getBoolean("show_shortcuts_first", false);
             int selectedMenuItemId = intent.getIntExtra("selected_menu_item_id", 0);
             int menuItemId = selectedMenuItemId > 0 ? selectedMenuItemId : (showShortcutsFirst ? R.id.menu_item_shortcuts : R.id.menu_item_containers);
 
-            actionBar.setHomeAsUpIndicator(R.drawable.icon_action_bar_menu);
+            NavigationView navigationView = findViewById(R.id.NavigationView);
             onNavigationItemSelected(navigationView.getMenu().findItem(menuItemId));
             navigationView.setCheckedItem(menuItemId);
-            
-            if (!requestAppPermissions()) RootFSInstaller.installIfNeeded(this);
-
-            int containerId = intent.getIntExtra("container_id", 0);
-            String startPath = intent.getStringExtra("start_path");
-            if (containerId > 0 && startPath != null) {
-                showFragment(new ContainerFileManagerFragment(containerId, startPath));
-            }
         }
-
-        // Блок автоматизации: перехватываем запрос на фоновую установку RootFS из SplashActivity
-        if (getIntent().getBooleanExtra("SETUP_ROOTFS_AND_RETURN", false)) {
-            new Thread(() -> {
-                while (true) {
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        break;
-                    }
-                    RootFS rootFS = RootFS.find(MainActivity.this);
-                    if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
-                        runOnUiThread(() -> {
-                            // Очищаем стек и возвращаемся к нашей точке входа
-                            Intent intentSplash = new Intent(MainActivity.this, SplashActivity.class);
-                            intentSplash.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-                            startActivity(intentSplash);
-                            finish();
-                        });
-                        break;
-                    }
-                }
-            }).start();
-        }
+        
+        isAppReady = true;
     }
 
     @Override
@@ -125,7 +133,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                RootFSInstaller.installIfNeeded(this);
+                initEnvironment(getIntent());
             }
             else finish();
         }
@@ -134,6 +142,18 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        
+        if (requestCode == PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                if (Environment.isExternalStorageManager()) {
+                    initEnvironment(getIntent());
+                } else {
+                    finish();
+                }
+                return;
+            }
+        }
+        
         if (requestCode == MainActivity.OPEN_FILE_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
             if (openFileCallback != null) {
                 openFileCallback.call(data.getData());
@@ -171,12 +191,32 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private boolean requestAppPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) return false;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                    intent.addCategory("android.intent.category.DEFAULT");
+                    intent.setData(Uri.parse(String.format("package:%s", getApplicationContext().getPackageName())));
+                    startActivityForResult(intent, PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE);
+                } catch (Exception e) {
+                    Intent intent = new Intent();
+                    intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                    startActivityForResult(intent, PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE);
+                }
+                return true;
+            }
+            return false;
+        } 
+        else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
 
-        String[] permissions = new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE};
-        ActivityCompat.requestPermissions(this, permissions, PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE);
-        return true;
+            String[] permissions = new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE};
+            ActivityCompat.requestPermissions(this, permissions, PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE);
+            return true;
+        }
     }
 
     @Override
