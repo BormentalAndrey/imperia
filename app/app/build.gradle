@@ -3,27 +3,22 @@ plugins {
 }
 
 android {
-    // Указываем namespace здесь (современный стандарт вместо package в манифесте)
     namespace 'com.winlator'
     compileSdk 34
 
     defaultConfig {
         applicationId 'com.winlator'
         minSdkVersion 26
-        // КРИТИЧНО: Поднимаем target до 34, чтобы Android 14/15 корректно выдавал права
-        // и правильно обрабатывал foreground-сервисы.
         targetSdkVersion 34 
         versionCode 28
         versionName "11.1"
     }
 
-    // Решение проблемы Duplicate files
     packagingOptions {
         pickFirst '**/*.so'
     }
 
     buildTypes {
-        // Добавлен профиль для релизной сборки
         release {
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
@@ -31,7 +26,6 @@ android {
                 abiFilters 'arm64-v8a'
             }
         }
-        // В debug отключаем минификацию, чтобы видеть нормальные стектрейсы при крашах
         debug {
             minifyEnabled false 
             ndk {
@@ -61,4 +55,5 @@ dependencies {
     implementation 'com.github.luben:zstd-jni:1.5.2-3@aar'
     implementation 'org.tukaani:xz:1.7'
     implementation 'org.apache.commons:commons-compress:1.20'
+    implementation 'androidx.core:core-splashscreen:1.0.1'
 }
