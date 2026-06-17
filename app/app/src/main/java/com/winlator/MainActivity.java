@@ -41,7 +41,6 @@ import com.winlator.xenvironment.RootFS;
 import com.winlator.xenvironment.RootFSInstaller;
 
 import org.json.JSONObject;
-import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
     private static final String TAG = "MainActivity";
@@ -94,21 +93,23 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
         else {
             actionBar.setHomeAsUpIndicator(R.drawable.icon_action_bar_menu);
-            initEnvironment(intent);
+            initEnvironment();
         }
     }
 
-    private void initEnvironment(Intent intent) {
+    private void initEnvironment() {
         if (requestAppPermissions()) {
             return;
         }
 
         RootFS rootFS = RootFS.find(this);
         if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
+            Log.d(TAG, "RootFS ready");
             onEnvironmentReady();
             return;
         }
 
+        Log.d(TAG, "RootFS needs installation");
         RootFSInstaller.installIfNeeded(this);
 
         new Thread(() -> {
@@ -121,54 +122,46 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 }
                 RootFS currentRootFS = RootFS.find(MainActivity.this);
                 if (currentRootFS != null && currentRootFS.isValid() && currentRootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
-                    runOnUiThread(() -> onEnvironmentReady());
+                    Log.d(TAG, "RootFS installed after " + attempts + "s");
+                    runOnUiThread(MainActivity.this::onEnvironmentReady);
                     return;
                 }
                 attempts++;
             }
+            Log.e(TAG, "RootFS timeout");
             runOnUiThread(() -> isAppReady = true);
         }).start();
     }
 
     private void onEnvironmentReady() {
         ContainerManager containerManager = new ContainerManager(this);
-        Container targetContainer = null;
 
-        for (Container c : containerManager.getContainers()) {
-            if (CONTAINER_NAME.equals(c.getName())) {
-                targetContainer = c;
-                break;
-            }
-        }
-
-        if (targetContainer != null) {
-            launchContainer(targetContainer.id);
+        // Берём первый существующий контейнер, либо создаём новый
+        if (!containerManager.getContainers().isEmpty()) {
+            Container container = containerManager.getContainers().get(0);
+            Log.d(TAG, "Using existing container: " + container.id);
+            launchContainer(container);
         } else {
+            Log.d(TAG, "No containers found, creating...");
             createAndLaunchContainer(containerManager);
         }
     }
 
     private void createAndLaunchContainer(ContainerManager containerManager) {
         try {
+            Log.d(TAG, "Creating container...");
+            
             JSONObject data = new JSONObject();
             data.put("name", CONTAINER_NAME);
-            data.put("screenSize", "800x600");
-            data.put("graphicsDriver", "virgl");
-            data.put("dxwrapper", "wined3d");
-            data.put("audioDriver", "alsa");
-            data.put("envVars", 
-                "MESA_GL_VERSION_OVERRIDE=4.0 " +
-                "MESA_GLSL_VERSION_OVERRIDE=400 " +
-                "WINEESYNC=1"
-            );
-            data.put("box64Preset", "performance");
-            data.put("startupSelection", 1);
             
             containerManager.createContainerAsync(data, container -> {
                 runOnUiThread(() -> {
                     if (container != null) {
-                        launchContainer(container.id);
+                        Log.d(TAG, "Container created: " + container.id);
+                        containerManager.activateContainer(container);
+                        launchContainer(container);
                     } else {
+                        Log.e(TAG, "Container creation returned null");
                         isAppReady = true;
                     }
                 });
@@ -179,19 +172,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
     }
 
-    private void launchContainer(int containerId) {
+    private void launchContainer(Container container) {
         ContainerManager cm = new ContainerManager(this);
-        Container container = cm.getContainerById(containerId);
-
-        if (container == null) {
-            isAppReady = true;
-            return;
-        }
-
         cm.activateContainer(container);
+        
+        Log.d(TAG, "Launching container: " + container.id);
 
         Intent xServerIntent = new Intent(this, XServerDisplayActivity.class);
-        xServerIntent.putExtra("container_id", containerId);
+        xServerIntent.putExtra("container_id", container.id);
         
         startActivity(xServerIntent);
         
@@ -209,7 +197,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                initEnvironment(getIntent());
+                initEnvironment();
             } else {
                 finish();
             }
@@ -223,7 +211,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         if (requestCode == PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if (Environment.isExternalStorageManager()) {
-                    initEnvironment(getIntent());
+                    initEnvironment();
                 } else {
                     finish();
                 }
