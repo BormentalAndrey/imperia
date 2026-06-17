@@ -494,7 +494,13 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         if (container != null) {
             if (container.getHUDMode() == FrameRating.Mode.FULL.ordinal()) envVars.put("X11_WND_GPU_INFO", "1");
 
-            String desktopName = shortcut != null || getIntent().hasExtra("exec_path") ? "nogui" : "shell";
+            // Поддержка start_path для прямого запуска игр
+            Intent intent = getIntent();
+            String startPath = intent.getStringExtra("start_path");
+            boolean hasStartPath = startPath != null && !startPath.isEmpty();
+            boolean hasExecPath = intent.hasExtra("exec_path");
+            
+            String desktopName = shortcut != null || hasExecPath || hasStartPath ? "nogui" : "shell";
             String guestExecutable = "wine explorer /desktop="+desktopName+","+xServer.screenInfo+" "+getWineStartCommand();
             guestProgramLauncherComponent.setGuestExecutable(guestExecutable);
 
@@ -949,7 +955,23 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
         else {
             Intent intent = getIntent();
-            if (intent.hasExtra("exec_path")) {
+            
+            // Поддержка start_path для прямого запуска игр
+            String startPath = intent.getStringExtra("start_path");
+            if (startPath != null && !startPath.isEmpty()) {
+                // Преобразуем DOS-путь в формат wine
+                if (startPath.matches("^[A-Za-z]:\\\\.+")) {
+                    // Это DOS-путь вида D:\nfsu2\SPEED2.EXE
+                    String execDir = startPath.substring(0, startPath.lastIndexOf("\\"));
+                    String filename = startPath.substring(startPath.lastIndexOf("\\") + 1);
+                    cmdArgs = "/dir "+StringUtils.escapeDOSPath(execDir)+" \""+filename+"\"";
+                } else {
+                    // Unix-путь — преобразуем через стандартный метод
+                    execPath = WineUtils.unixToDOSPath(startPath, container);
+                }
+            }
+            
+            if (execPath == null && intent.hasExtra("exec_path")) {
                 execPath = WineUtils.unixToDOSPath(intent.getStringExtra("exec_path"), container);
 
                 if (execPath.endsWith(".lnk")) {
