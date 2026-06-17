@@ -99,9 +99,22 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             return;
         }
 
-        RootFSInstaller.installIfNeeded(this, () -> {
-            runOnUiThread(() -> onEnvironmentReady(intent));
-        });
+        RootFSInstaller.installIfNeeded(this);
+
+        new Thread(() -> {
+            while (!isFinishing() && !isDestroyed()) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    break;
+                }
+                RootFS currentRootFS = RootFS.find(MainActivity.this);
+                if (currentRootFS != null && currentRootFS.isValid() && currentRootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
+                    runOnUiThread(() -> onEnvironmentReady(intent));
+                    break;
+                }
+            }
+        }).start();
     }
 
     private void onEnvironmentReady(Intent intent) {
