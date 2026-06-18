@@ -33,7 +33,6 @@ public class ContainerManager {
         
         if (containers.isEmpty()) {
             createDefaultContainerIfNeeded();
-            loadContainers();
         }
     }
 
@@ -55,9 +54,15 @@ public class ContainerManager {
                 for (File file : files) {
                     if (file.isDirectory()) {
                         if (file.getName().startsWith(RootFS.USER+"-")) {
+                            File configFile = new File(file, ".container");
+                            if (!configFile.exists()) continue;
+                            
+                            String configData = FileUtils.readString(configFile);
+                            if (configData == null || configData.isEmpty()) continue;
+                            
                             Container container = new Container(Integer.parseInt(file.getName().replace(RootFS.USER+"-", "")));
                             container.setRootDir(new File(homeDir, RootFS.USER+"-"+container.id));
-                            JSONObject data = new JSONObject(FileUtils.readString(container.getConfigFile()));
+                            JSONObject data = new JSONObject(configData);
                             container.loadData(data);
                             containers.add(container);
                             maxContainerId = Math.max(maxContainerId, container.id);
