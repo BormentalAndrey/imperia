@@ -154,7 +154,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         startActivity(xServerIntent);
         
         isAppReady = true;
-        finish();
+        // НЕ вызываем finish() — оставляем MainActivity в стеке как в оригинале
     }
 
     @Override
