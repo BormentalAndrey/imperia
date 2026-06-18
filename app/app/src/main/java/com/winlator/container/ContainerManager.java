@@ -78,15 +78,13 @@ public class ContainerManager {
         try {
             JSONObject data = new JSONObject();
             data.put("name", "NFS Underground 2 Mali");
-            data.put("screenSize", "640x480");
-            data.put("graphicsDriver", "vortek,virgl");
-            data.put("dxwrapper", "wined3d");
-            data.put("audioDriver", "alsa");
             
-            Container container = createContainer(data);
-            if (container != null) {
-                activateContainer(container);
-            }
+            createContainerAsync(data, container -> {
+                if (container != null) {
+                    activateContainer(container);
+                    FileUtils.chmod(container.getRootDir(), 0771);
+                }
+            });
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -142,6 +140,9 @@ public class ContainerManager {
                 FileUtils.delete(containerDir);
                 return null;
             }
+
+            FileUtils.chmod(containerDir, 0771);
+            FileUtils.chmod(container.getConfigFile(), 0666);
 
             container.saveData();
             maxContainerId++;
