@@ -244,6 +244,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 if (((BaseFileManagerFragment)currentFragment).onBackPressed()) return;
             } else if (currentFragment instanceof ContainersFragment) {
                 finish();
+                return; // Исправлено: прерываем выполнение, чтобы не запускать showFragment после завершения Activity
             }
         }
         showFragment(new ContainersFragment());
