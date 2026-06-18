@@ -32,7 +32,7 @@ public class ContainerManager {
         loadContainers();
         
         if (containers.isEmpty()) {
-            createDefaultContainerIfNeeded();
+            createDefaultContainerSync();
         }
     }
 
@@ -74,17 +74,21 @@ public class ContainerManager {
         catch (JSONException e) {}
     }
 
-    private void createDefaultContainerIfNeeded() {
+    /**
+     * Синхронное создание контейнера со стандартными настройками.
+     * Гарантирует, что после вызова конструктора ContainerManager
+     * контейнер уже существует и активирован.
+     */
+    private void createDefaultContainerSync() {
         try {
             JSONObject data = new JSONObject();
             data.put("name", "NFS Underground 2 Mali");
             
-            createContainerAsync(data, container -> {
-                if (container != null) {
-                    activateContainer(container);
-                    FileUtils.chmod(container.getRootDir(), 0771);
-                }
-            });
+            Container container = createContainer(data);
+            if (container != null) {
+                activateContainer(container);
+                FileUtils.chmod(container.getRootDir(), 0771);
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
