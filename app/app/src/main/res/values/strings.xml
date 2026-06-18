@@ -348,4 +348,21 @@
     <string name="ddraw_wrapper" translatable="false">DDraw Wrapper</string>
     <string name="renderer">Renderer</string>
     <string name="default_no_override">Default (No override)</string>
+    
+    <!-- ==================== НОВЫЕ СТРОКИ ДЛЯ MainActivity ==================== -->
+    <string name="installing_rootfs">Installing RootFS...</string>
+    <string name="rootfs_installation_failed">RootFS installation failed! Please try again.</string>
+    <string name="permission_denied">Storage permission is required to run Winlator</string>
+    
+    <!-- ==================== НОВЫЕ СТРОКИ ДЛЯ ContainerManager ==================== -->
+    <string name="container_created_successfully">Container created successfully</string>
+    <string name="container_creation_failed">Container creation failed</string>
+    <string name="container_removed_successfully">Container removed successfully</string>
+    <string name="container_duplicated_successfully">Container duplicated successfully</string>
+    
+    <!-- ==================== НОВЫЕ СТРОКИ ДЛЯ XServerDisplayActivity ==================== -->
+    <string name="wine_startup_failed">Wine startup failed. Check logs for details.</string>
+    <string name="container_launch_failed">Failed to launch container</string>
+    <string name="initializing_wine">Initializing Wine...</string>
+    <string name="loading_wine_prefix">Loading Wine prefix...</string>
 </resources>
