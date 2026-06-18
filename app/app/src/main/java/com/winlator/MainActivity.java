@@ -9,7 +9,11 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.MenuItem;
+import android.widget.Toast;
 
 import androidx.annotation.IntRange;
 import androidx.annotation.NonNull;
@@ -32,15 +36,20 @@ import com.winlator.core.AppUtils;
 import com.winlator.core.Callback;
 import com.winlator.core.LocaleHelper;
 import com.winlator.core.PreloaderDialog;
+import com.winlator.xenvironment.RootFS;
 import com.winlator.xenvironment.RootFSInstaller;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
+    private static final String TAG = "MainActivity";
+    private static final int ROOTFS_TIMEOUT_SECONDS = 120;
+    
     public static final boolean DEBUG_MODE = false;
     public static final @IntRange(from = 1, to = 19) byte CONTAINER_PATTERN_COMPRESSION_LEVEL = 9;
     public static final byte PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE = 1;
     public static final byte OPEN_FILE_REQUEST_CODE = 2;
     public static final byte EDIT_INPUT_CONTROLS_REQUEST_CODE = 3;
     public static final byte OPEN_DIRECTORY_REQUEST_CODE = 4;
+    
     private DrawerLayout drawerLayout;
     public final PreloaderDialog preloaderDialog = new PreloaderDialog(this);
     private boolean editInputControls = false;
@@ -48,6 +57,8 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private Callback<Uri> openFileCallback;
     private SharedPreferences preferences;
     private Fragment currentFragment;
+    private boolean isLaunchingContainer = false;
+    private boolean isRootFSInstalled = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,6 +78,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
         Intent intent = getIntent();
         editInputControls = intent.getBooleanExtra("edit_input_controls", false);
+        
         if (editInputControls) {
             selectedProfileId = intent.getIntExtra("selected_profile_id", 0);
             actionBar.setHomeAsUpIndicator(R.drawable.icon_action_bar_back);
@@ -81,23 +93,127 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             actionBar.setHomeAsUpIndicator(R.drawable.icon_action_bar_menu);
             onNavigationItemSelected(navigationView.getMenu().findItem(menuItemId));
             navigationView.setCheckedItem(menuItemId);
-            if (!requestAppPermissions()) RootFSInstaller.installIfNeeded(this);
+            
+            // Проверяем разрешения и инициализируем окружение
+            if (!requestAppPermissions()) {
+                initializeEnvironment();
+            }
 
             int containerId = intent.getIntExtra("container_id", 0);
             String startPath = intent.getStringExtra("start_path");
             if (containerId > 0 && startPath != null) {
                 showFragment(new ContainerFileManagerFragment(containerId, startPath));
             }
+        }
+    }
+
+    /**
+     * Инициализация окружения с проверкой RootFS
+     */
+    private void initializeEnvironment() {
+        RootFS rootFS = RootFS.find(this);
+        
+        // Проверяем, установлен ли RootFS
+        if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
+            Log.d(TAG, "RootFS already installed, version: " + rootFS.getVersion());
+            isRootFSInstalled = true;
+            checkAndLaunchContainer();
+            return;
+        }
+
+        // RootFS не установлен или устарел - запускаем установку
+        Log.d(TAG, "RootFS needs installation or update");
+        preloaderDialog.show(R.string.installing_rootfs);
+        
+        // Запускаем установку в фоновом потоке
+        RootFSInstaller.installIfNeeded(this);
+        
+        // Ожидаем завершения установки
+        waitForRootFSInstallation();
+    }
+
+    /**
+     * Ожидание завершения установки RootFS с таймаутом
+     */
+    private void waitForRootFSInstallation() {
+        new Thread(() -> {
+            int attempts = 0;
+            while (!isFinishing() && !isDestroyed() && attempts < ROOTFS_TIMEOUT_SECONDS) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+                
+                RootFS rootFS = RootFS.find(MainActivity.this);
+                if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
+                    Log.d(TAG, "RootFS installed successfully after " + attempts + "s");
+                    runOnUiThread(() -> {
+                        isRootFSInstalled = true;
+                        preloaderDialog.close();
+                        checkAndLaunchContainer();
+                    });
+                    return;
+                }
+                attempts++;
+            }
             
-            // Автозапуск контейнера если он существует
+            // Таймаут установки
+            runOnUiThread(() -> {
+                preloaderDialog.close();
+                Log.e(TAG, "RootFS installation timeout!");
+                Toast.makeText(MainActivity.this, R.string.rootfs_installation_failed, Toast.LENGTH_LONG).show();
+                showFragment(new ContainersFragment());
+            });
+        }).start();
+    }
+
+    /**
+     * Проверка и запуск контейнера
+     */
+    private void checkAndLaunchContainer() {
+        if (isLaunchingContainer) {
+            Log.d(TAG, "Container launch already in progress");
+            return;
+        }
+        
+        try {
+            // Проверяем наличие RootFS
+            RootFS rootFS = RootFS.find(this);
+            if (rootFS == null || !rootFS.isValid()) {
+                Log.e(TAG, "RootFS is invalid or null");
+                showFragment(new ContainersFragment());
+                return;
+            }
+
+            // Проверяем наличие Wine
+            File wineBinary = new File(rootFS.getRootDir(), rootFS.getWinePath() + "/bin/wine");
+            if (!wineBinary.exists()) {
+                Log.e(TAG, "Wine binary not found at: " + wineBinary.getPath());
+                showFragment(new ContainersFragment());
+                return;
+            }
+
             ContainerManager cm = new ContainerManager(this);
+            
             if (!cm.getContainers().isEmpty()) {
+                isLaunchingContainer = true;
                 Container container = cm.getContainers().get(0);
+                Log.d(TAG, "Launching container: " + container.id + " - " + container.getName());
+                
                 cm.activateContainer(container);
                 Intent xServerIntent = new Intent(this, XServerDisplayActivity.class);
                 xServerIntent.putExtra("container_id", container.id);
                 startActivity(xServerIntent);
+                finish();
+            } else {
+                Log.d(TAG, "No containers found, showing ContainersFragment");
+                showFragment(new ContainersFragment());
             }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in checkAndLaunchContainer", e);
+            showFragment(new ContainersFragment());
         }
     }
 
@@ -111,9 +227,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                RootFSInstaller.installIfNeeded(this);
+                initializeEnvironment();
+            } else {
+                Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show();
+                finish();
             }
-            else finish();
         }
     }
 
@@ -121,7 +239,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == MainActivity.OPEN_FILE_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            if (openFileCallback != null) {
+            if (openFileCallback != null && data != null) {
                 openFileCallback.call(data.getData());
                 openFileCallback = null;
             }
@@ -132,8 +250,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         if ((newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE ||
-            newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) && currentFragment instanceof BaseFileManagerFragment) {
-            ((BaseFileManagerFragment)currentFragment).onOrientationChanged();
+            newConfig.orientation == Configuration.ORIENTATION_PORTRAIT) && 
+            currentFragment instanceof BaseFileManagerFragment) {
+            ((BaseFileManagerFragment) currentFragment).onOrientationChanged();
         }
     }
 
@@ -141,14 +260,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public void onBackPressed() {
         if (currentFragment != null && currentFragment.isVisible()) {
             if (currentFragment instanceof BaseFileManagerFragment) {
-                BaseFileManagerFragment fileManagerFragment = (BaseFileManagerFragment)currentFragment;
+                BaseFileManagerFragment fileManagerFragment = (BaseFileManagerFragment) currentFragment;
                 if (fileManagerFragment.onBackPressed()) return;
-            }
-            else if (currentFragment instanceof ContainersFragment) {
+            } else if (currentFragment instanceof ContainersFragment) {
                 finish();
+                return;
             }
         }
-
         showFragment(new ContainersFragment());
     }
 
@@ -158,9 +276,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
 
     private boolean requestAppPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) return false;
+            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+            return false;
+        }
 
-        String[] permissions = new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE};
+        String[] permissions = new String[]{
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        };
         ActivityCompat.requestPermissions(this, permissions, PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE);
         return true;
     }
@@ -173,15 +296,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             itemId == R.id.menu_item_view_style ||
             itemId == R.id.menu_item_new_folder) {
             return super.onOptionsItemSelected(menuItem);
-        }
-        else {
+        } else {
             if (editInputControls) {
                 setResult(RESULT_OK);
                 finish();
-            }
-            else {
+            } else {
                 if (currentFragment instanceof BaseFileManagerFragment) {
-                    BaseFileManagerFragment fileManagerFragment = (BaseFileManagerFragment)currentFragment;
+                    BaseFileManagerFragment fileManagerFragment = (BaseFileManagerFragment) currentFragment;
                     if (fileManagerFragment.onOptionsMenuClicked()) return true;
                 }
                 drawerLayout.openDrawer(GravityCompat.START);
@@ -213,7 +334,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 showFragment(new SettingsFragment());
                 break;
             case R.id.menu_item_about:
-                (new AboutDialog(this)).show();
+                new AboutDialog(this).show();
                 break;
         }
         return true;
