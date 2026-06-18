@@ -513,10 +513,17 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             if (container.getHUDMode() == FrameRating.Mode.FULL.ordinal()) envVars.put("X11_WND_GPU_INFO", "1");
 
             String desktopName = shortcut != null || getIntent().hasExtra("exec_path") ? "nogui" : "shell";
-            Log.d(TAG, "desktopName: " + desktopName);
             
-            String guestExecutable = "wine explorer /desktop="+desktopName+","+xServer.screenInfo+" "+getWineStartCommand();
-            Log.d(TAG, "guestExecutable: " + guestExecutable);
+            File systemReg = new File(rootFS.getRootDir(), RootFS.WINEPREFIX + "/system.reg");
+            String guestExecutable;
+            
+            if (!systemReg.exists() || systemReg.length() < 1024) {
+                guestExecutable = "wineboot -u";
+                Log.d(TAG, "First run: wineboot -u");
+            } else {
+                guestExecutable = "wine explorer /desktop="+desktopName+","+xServer.screenInfo+" "+getWineStartCommand();
+                Log.d(TAG, "Normal run: " + guestExecutable);
+            }
             
             guestProgramLauncherComponent.setGuestExecutable(guestExecutable);
 
@@ -574,12 +581,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             overrideEnvVars = null;
         }
         
+        winHandler.start();
+        Log.d(TAG, "WinHandler started");
+        
         Log.d(TAG, "Starting environment components...");
         environment.startEnvironmentComponents();
         Log.d(TAG, "Environment components started");
-
-        winHandler.start();
-        Log.d(TAG, "WinHandler started");
         
         envVars.clear();
         graphicsDriver = null;
@@ -1009,7 +1016,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             cmdArgs = "/dir "+StringUtils.escapeDOSPath(execDir)+" \""+filename+"\""+execArgs;
         }
 
-        if (cmdArgs.isEmpty()) cmdArgs = "/dir C:\\windows \"wfm.exe\"";
+        if (cmdArgs.isEmpty()) {
+            cmdArgs = "/dir C:\\windows \"wfm.exe\"";
+        }
 
         if (overrideEnvVars != null && overrideEnvVars.has("EXTRA_EXEC_ARGS")) {
             cmdArgs += " "+overrideEnvVars.get("EXTRA_EXEC_ARGS");
