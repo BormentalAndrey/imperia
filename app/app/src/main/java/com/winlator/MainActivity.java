@@ -40,8 +40,6 @@ import com.winlator.core.PreloaderDialog;
 import com.winlator.xenvironment.RootFS;
 import com.winlator.xenvironment.RootFSInstaller;
 
-import org.json.JSONObject;
-
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
     private static final String TAG = "MainActivity";
     public static final boolean DEBUG_MODE = false;
@@ -51,7 +49,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     public static final byte EDIT_INPUT_CONTROLS_REQUEST_CODE = 3;
     public static final byte OPEN_DIRECTORY_REQUEST_CODE = 4;
     private static final int ROOTFS_TIMEOUT_SECONDS = 120;
-    private static final String CONTAINER_NAME = "NFS Underground 2 Mali";
     
     private DrawerLayout drawerLayout;
     public final PreloaderDialog preloaderDialog = new PreloaderDialog(this);
@@ -134,48 +131,21 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     }
 
     private void onEnvironmentReady() {
-        ContainerManager containerManager = new ContainerManager(this);
+        ContainerManager cm = new ContainerManager(this);
 
-        // Берём первый существующий контейнер, либо создаём новый
-        if (!containerManager.getContainers().isEmpty()) {
-            Container container = containerManager.getContainers().get(0);
-            Log.d(TAG, "Using existing container: " + container.id);
-            launchContainer(container);
-        } else {
-            Log.d(TAG, "No containers found, creating...");
-            createAndLaunchContainer(containerManager);
-        }
-    }
-
-    private void createAndLaunchContainer(ContainerManager containerManager) {
-        try {
-            Log.d(TAG, "Creating container...");
-            
-            JSONObject data = new JSONObject();
-            data.put("name", CONTAINER_NAME);
-            
-            containerManager.createContainerAsync(data, container -> {
-                runOnUiThread(() -> {
-                    if (container != null) {
-                        Log.d(TAG, "Container created: " + container.id);
-                        containerManager.activateContainer(container);
-                        launchContainer(container);
-                    } else {
-                        Log.e(TAG, "Container creation returned null");
-                        isAppReady = true;
-                    }
-                });
-            });
-        } catch (Exception e) {
-            Log.e(TAG, "JSON error", e);
+        if (cm.getContainers().isEmpty()) {
+            Log.e(TAG, "Container was not created");
             isAppReady = true;
+            return;
         }
+
+        Container container = cm.getContainers().get(0);
+        Log.d(TAG, "Using container: " + container.id + " - " + container.getName());
+        cm.activateContainer(container);
+        launchContainer(container);
     }
 
     private void launchContainer(Container container) {
-        ContainerManager cm = new ContainerManager(this);
-        cm.activateContainer(container);
-        
         Log.d(TAG, "Launching container: " + container.id);
 
         Intent xServerIntent = new Intent(this, XServerDisplayActivity.class);
@@ -244,7 +214,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 if (((BaseFileManagerFragment)currentFragment).onBackPressed()) return;
             } else if (currentFragment instanceof ContainersFragment) {
                 finish();
-                return; // Исправлено: прерываем выполнение, чтобы не запускать showFragment после завершения Activity
+                return;
             }
         }
         showFragment(new ContainersFragment());
