@@ -8,7 +8,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -103,7 +102,6 @@ import java.util.Iterator;
 import java.util.concurrent.Executors;
 
 public class XServerDisplayActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
-    private static final String TAG = "XServerDisplay";
     private XServerView xServerView;
     private InputControlsView inputControlsView;
     private TouchpadView touchpadView;
@@ -140,7 +138,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        Log.d(TAG, "onCreate START");
         AppUtils.setActivityTheme(this);
         super.onCreate(savedInstanceState);
         AppUtils.hideSystemUI(this);
@@ -165,24 +162,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         navigationView.setNavigationItemSelectedListener(this);
 
         rootFS = RootFS.find(this);
-        Log.d(TAG, "rootFS: " + (rootFS != null ? rootFS.getRootDir().getPath() : "null"));
 
         if (!isGenerateWineprefix()) {
             ContainerManager containerManager = new ContainerManager(this);
-            int cId = getIntent().getIntExtra("container_id", 0);
-            Log.d(TAG, "container_id from intent: " + cId);
-            
-            container = containerManager.getContainerById(cId);
-            Log.d(TAG, "container: " + (container != null ? container.id + " - " + container.getName() : "NULL"));
-            
-            if (container == null) {
-                Log.e(TAG, "Container is NULL! Finishing activity.");
-                finish();
-                return;
-            }
-            
+            container = containerManager.getContainerById(getIntent().getIntExtra("container_id", 0));
             containerManager.activateContainer(container);
-            Log.d(TAG, "Container activated: " + container.id);
 
             boolean wineprefixNeedsUpdate = container.getExtra("wineprefixNeedsUpdate").equals("t");
             if (wineprefixNeedsUpdate) {
@@ -245,7 +229,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         preloaderDialog.show(R.string.starting_up);
-        Log.d(TAG, "Starting XEnvironment setup...");
 
         inputControlsManager = new InputControlsManager(this);
         xServer = new XServer(this, screenInfo);
@@ -494,7 +477,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
 
     private void setupXEnvironment() {
-        Log.d(TAG, "setupXEnvironment START");
         String rootPath = rootFS.getRootDir().getPath();
         envVars.put("MESA_DEBUG", "silent");
         envVars.put("MESA_NO_ERROR", "1");
@@ -513,18 +495,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             if (container.getHUDMode() == FrameRating.Mode.FULL.ordinal()) envVars.put("X11_WND_GPU_INFO", "1");
 
             String desktopName = shortcut != null || getIntent().hasExtra("exec_path") ? "nogui" : "shell";
-            
-            File systemReg = new File(rootFS.getRootDir(), RootFS.WINEPREFIX + "/system.reg");
-            String guestExecutable;
-            
-            if (!systemReg.exists() || systemReg.length() < 1024) {
-                guestExecutable = "wineboot -u";
-                Log.d(TAG, "First run: wineboot -u");
-            } else {
-                guestExecutable = "wine explorer /desktop="+desktopName+","+xServer.screenInfo+" "+getWineStartCommand();
-                Log.d(TAG, "Normal run: " + guestExecutable);
-            }
-            
+            String guestExecutable = "wine explorer /desktop="+desktopName+","+xServer.screenInfo+" "+getWineStartCommand();
             guestProgramLauncherComponent.setGuestExecutable(guestExecutable);
 
             envVars.putAll(container.getEnvVars());
@@ -580,14 +551,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             envVars.putAll(overrideEnvVars);
             overrideEnvVars = null;
         }
-        
-        winHandler.start();
-        Log.d(TAG, "WinHandler started");
-        
-        Log.d(TAG, "Starting environment components...");
         environment.startEnvironmentComponents();
-        Log.d(TAG, "Environment components started");
-        
+
+        winHandler.start();
         envVars.clear();
         graphicsDriver = null;
         dxwrapperConfig = null;
@@ -983,19 +949,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
         else {
             Intent intent = getIntent();
-            
-            String startPath = intent.getStringExtra("start_path");
-            if (startPath != null && !startPath.isEmpty()) {
-                if (startPath.matches("^[A-Za-z]:\\\\.+")) {
-                    String execDir = startPath.substring(0, startPath.lastIndexOf("\\"));
-                    String filename = startPath.substring(startPath.lastIndexOf("\\") + 1);
-                    cmdArgs = "/dir "+StringUtils.escapeDOSPath(execDir)+" \""+filename+"\"";
-                } else {
-                    execPath = WineUtils.unixToDOSPath(startPath, container);
-                }
-            }
-            
-            if (execPath == null && intent.hasExtra("exec_path")) {
+            if (intent.hasExtra("exec_path")) {
                 execPath = WineUtils.unixToDOSPath(intent.getStringExtra("exec_path"), container);
 
                 if (execPath.endsWith(".lnk")) {
@@ -1016,9 +970,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             cmdArgs = "/dir "+StringUtils.escapeDOSPath(execDir)+" \""+filename+"\""+execArgs;
         }
 
-        if (cmdArgs.isEmpty()) {
-            cmdArgs = "/dir C:\\windows \"wfm.exe\"";
-        }
+        if (cmdArgs.isEmpty()) cmdArgs = "/dir C:\\windows \"wfm.exe\"";
 
         if (overrideEnvVars != null && overrideEnvVars.has("EXTRA_EXEC_ARGS")) {
             cmdArgs += " "+overrideEnvVars.get("EXTRA_EXEC_ARGS");
