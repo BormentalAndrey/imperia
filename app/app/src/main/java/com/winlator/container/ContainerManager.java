@@ -75,7 +75,7 @@ public class ContainerManager {
     }
 
     /**
-     * Синхронное создание контейнера со стандартными настройками.
+     * Синхронное создание контейнера с настройками для Mali GPU.
      * Гарантирует, что после вызова конструктора ContainerManager
      * контейнер уже существует и активирован.
      */
@@ -83,6 +83,8 @@ public class ContainerManager {
         try {
             JSONObject data = new JSONObject();
             data.put("name", "NFS Underground 2 Mali");
+            data.put("graphicsDriver", "virgl,virgl");
+            data.put("dxwrapper", "wined3d");
             
             Container container = createContainer(data);
             if (container != null) {
