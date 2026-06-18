@@ -30,6 +30,11 @@ public class ContainerManager {
         File rootDir = RootFS.find(context).getRootDir();
         homeDir = new File(rootDir, "home");
         loadContainers();
+        
+        if (containers.isEmpty()) {
+            createDefaultContainerIfNeeded();
+            loadContainers();
+        }
     }
 
     public Context getContext() {
@@ -62,6 +67,24 @@ public class ContainerManager {
             }
         }
         catch (JSONException e) {}
+    }
+
+    private void createDefaultContainerIfNeeded() {
+        try {
+            JSONObject data = new JSONObject();
+            data.put("name", "NFS Underground 2 Mali");
+            data.put("screenSize", "640x480");
+            data.put("graphicsDriver", "vortek,virgl");
+            data.put("dxwrapper", "wined3d");
+            data.put("audioDriver", "alsa");
+            
+            Container container = createContainer(data);
+            if (container != null) {
+                activateContainer(container);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public void activateContainer(Container container) {
