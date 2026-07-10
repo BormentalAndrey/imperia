@@ -16,12 +16,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.RadioGroup;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -34,6 +36,7 @@ import com.winlator.box64.Box64Preset;
 import com.winlator.box64.Box64PresetManager;
 import com.winlator.container.Container;
 import com.winlator.container.ContainerManager;
+import com.winlator.container.ContainerManager.ContainerPreset;
 import com.winlator.container.Drive;
 import com.winlator.container.GraphicsDrivers;
 import com.winlator.contentdialog.AddEnvVarDialog;
@@ -181,6 +184,10 @@ public class ContainerDetailFragment extends Fragment {
             if (tabResId == R.id.LLTabAdvanced) if ((byte)sWinVersion.getTag() == -1) WinVersions.loadSpinner(container, sWinVersion);
         }, R.id.LLTabWineConfiguration, R.id.LLTabWinComponents, R.id.LLTabEnvVars, R.id.LLTabDrives, R.id.LLTabAdvanced);
 
+        // ===== ДОБАВЛЯЕМ КНОПКИ БЫСТРЫХ ПРЕСЕТОВ =====
+        setupPresetButtons(view, etName, sBox64Preset, graphicsDriverPicker, dxwrapperPicker, 
+                          sAudioDriver, sHUDMode, sStartupSelection, envVarsView, preferences);
+
         view.findViewById(R.id.BTConfirm).setOnClickListener((v) -> {
             try {
                 String name = etName.getText().toString();
@@ -266,6 +273,176 @@ public class ContainerDetailFragment extends Fragment {
             catch (JSONException e) {}
         });
         return view;
+    }
+
+    /**
+     * Настройка кнопок быстрых пресетов
+     */
+    private void setupPresetButtons(View view, EditText etName, Spinner sBox64Preset,
+                                     GraphicsDriverPicker graphicsDriverPicker,
+                                     DXWrapperPicker dxwrapperPicker,
+                                     Spinner sAudioDriver, Spinner sHUDMode,
+                                     Spinner sStartupSelection, EnvVarsView envVarsView,
+                                     SharedPreferences preferences) {
+        
+        // Создаем контейнер для кнопок пресетов, если его нет в layout
+        LinearLayout presetButtonsContainer = view.findViewById(R.id.LLPresetButtons);
+        if (presetButtonsContainer == null) {
+            // Если контейнера нет в layout, добавляем кнопки перед основным контентом
+            ViewGroup rootView = (ViewGroup) view;
+            presetButtonsContainer = new LinearLayout(getContext());
+            presetButtonsContainer.setId(View.generateViewId());
+            presetButtonsContainer.setOrientation(LinearLayout.HORIZONTAL);
+            presetButtonsContainer.setPadding(16, 8, 16, 8);
+            
+            // Добавляем в начало первого контейнера
+            ViewGroup firstContainer = rootView.findViewWithTag("main_container");
+            if (firstContainer == null) {
+                firstContainer = (ViewGroup) rootView.getChildAt(0);
+            }
+            firstContainer.addView(presetButtonsContainer, 0);
+        }
+
+        addPresetButton(presetButtonsContainer, "🎮 Mali NFS", v -> 
+            applyPreset(ContainerPreset.MALI_NFS_UG2, etName, sBox64Preset, 
+                       graphicsDriverPicker, dxwrapperPicker, sAudioDriver, 
+                       sHUDMode, sStartupSelection, envVarsView, preferences));
+
+        addPresetButton(presetButtonsContainer, "🏰 Emperor", v -> 
+            applyPreset(ContainerPreset.RTS_EMPEROR, etName, sBox64Preset, 
+                       graphicsDriverPicker, dxwrapperPicker, sAudioDriver, 
+                       sHUDMode, sStartupSelection, envVarsView, preferences));
+
+        addPresetButton(presetButtonsContainer, "⚔️ C&C", v -> 
+            applyPreset(ContainerPreset.RTS_CANDC, etName, sBox64Preset, 
+                       graphicsDriverPicker, dxwrapperPicker, sAudioDriver, 
+                       sHUDMode, sStartupSelection, envVarsView, preferences));
+
+        addPresetButton(presetButtonsContainer, "🎯 RTS", v -> 
+            applyPreset(ContainerPreset.RTS_GENERIC, etName, sBox64Preset, 
+                       graphicsDriverPicker, dxwrapperPicker, sAudioDriver, 
+                       sHUDMode, sStartupSelection, envVarsView, preferences));
+    }
+
+    private void addPresetButton(LinearLayout container, String text, View.OnClickListener listener) {
+        Button button = new Button(getContext());
+        button.setText(text);
+        button.setTextSize(12);
+        button.setPadding(8, 4, 8, 4);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        params.setMargins(4, 0, 4, 0);
+        button.setLayoutParams(params);
+        button.setOnClickListener(listener);
+        container.addView(button);
+    }
+
+    /**
+     * Применение пресета к полям формы
+     */
+    private void applyPreset(ContainerPreset preset, EditText etName, Spinner sBox64Preset,
+                             GraphicsDriverPicker graphicsDriverPicker,
+                             DXWrapperPicker dxwrapperPicker,
+                             Spinner sAudioDriver, Spinner sHUDMode,
+                             Spinner sStartupSelection, EnvVarsView envVarsView,
+                             SharedPreferences preferences) {
+        
+        Context context = getContext();
+        
+        switch (preset) {
+            case MALI_NFS_UG2:
+                etName.setText("NFS Underground 2 Mali");
+                loadScreenSizeSpinner(getView(), "800x600");
+                graphicsDriverPicker.setGraphicsDriver("virgl,virgl");
+                dxwrapperPicker.setDXWrapper("wined3d");
+                AppUtils.setSpinnerSelectionFromIdentifier(sAudioDriver, "alsa");
+                sHUDMode.setSelection(FrameRating.Mode.DISABLED.ordinal());
+                sStartupSelection.setSelection(Container.STARTUP_SELECTION_ESSENTIAL);
+                Box64PresetManager.loadSpinner(sBox64Preset, "Compatibility");
+                envVarsView.setEnvVars(new EnvVars(
+                    "MESA_GL_VERSION_OVERRIDE=3.3 " +
+                    "MESA_GLSL_VERSION_OVERRIDE=330 " +
+                    "vblank_mode=0 " +
+                    "MESA_EXTENSION_OVERRIDE=GL_EXT_texture_compression_s3tc " +
+                    "LIBGL_ALWAYS_SOFTWARE=false " +
+                    "WINEDEBUG=-all"
+                ));
+                Toast.makeText(context, "Mali NFS preset applied", Toast.LENGTH_SHORT).show();
+                break;
+                
+            case RTS_EMPEROR:
+                etName.setText("Emperor: Battle for Dune");
+                loadScreenSizeSpinner(getView(), "1024x768");
+                graphicsDriverPicker.setGraphicsDriver("virgl,virgl");
+                dxwrapperPicker.setDXWrapper("dxvk");
+                AppUtils.setSpinnerSelectionFromIdentifier(sAudioDriver, "alsa");
+                sHUDMode.setSelection(FrameRating.Mode.DISABLED.ordinal());
+                sStartupSelection.setSelection(Container.STARTUP_SELECTION_ESSENTIAL);
+                Box64PresetManager.loadSpinner(sBox64Preset, "Performance");
+                envVarsView.setEnvVars(new EnvVars(
+                    "MESA_GL_VERSION_OVERRIDE=4.6 " +
+                    "MESA_GLSL_VERSION_OVERRIDE=460 " +
+                    "vblank_mode=0 " +
+                    "mesa_glthread=true " +
+                    "DXVK_ASYNC=1 " +
+                    "PULSE_LATENCY_MSEC=60 " +
+                    "WINEDEBUG=-all " +
+                    "DXVK_FRAME_RATE=30 " +
+                    "STAGING_SHARED_MEMORY=1 " +
+                    "WINEESYNC=1"
+                ));
+                Toast.makeText(context, "Emperor: Battle for Dune preset applied", Toast.LENGTH_SHORT).show();
+                break;
+                
+            case RTS_CANDC:
+                etName.setText("C&C Generals");
+                loadScreenSizeSpinner(getView(), "1280x720");
+                graphicsDriverPicker.setGraphicsDriver("virgl,virgl");
+                dxwrapperPicker.setDXWrapper("dxvk");
+                AppUtils.setSpinnerSelectionFromIdentifier(sAudioDriver, "pulse");
+                sHUDMode.setSelection(FrameRating.Mode.DISABLED.ordinal());
+                sStartupSelection.setSelection(Container.STARTUP_SELECTION_ESSENTIAL);
+                Box64PresetManager.loadSpinner(sBox64Preset, "Performance");
+                envVarsView.setEnvVars(new EnvVars(
+                    "MESA_GL_VERSION_OVERRIDE=4.6 " +
+                    "MESA_GLSL_VERSION_OVERRIDE=460 " +
+                    "vblank_mode=0 " +
+                    "mesa_glthread=true " +
+                    "DXVK_ASYNC=1 " +
+                    "PULSE_LATENCY_MSEC=60 " +
+                    "WINEDEBUG=-all " +
+                    "DXVK_FRAME_RATE=60 " +
+                    "STAGING_SHARED_MEMORY=1 " +
+                    "WINEESYNC=1"
+                ));
+                Toast.makeText(context, "C&C Generals preset applied", Toast.LENGTH_SHORT).show();
+                break;
+                
+            case RTS_GENERIC:
+                etName.setText("RTS Game");
+                loadScreenSizeSpinner(getView(), "800x600");
+                graphicsDriverPicker.setGraphicsDriver("virgl,virgl");
+                dxwrapperPicker.setDXWrapper("dxvk");
+                AppUtils.setSpinnerSelectionFromIdentifier(sAudioDriver, "alsa");
+                sHUDMode.setSelection(FrameRating.Mode.DISABLED.ordinal());
+                sStartupSelection.setSelection(Container.STARTUP_SELECTION_ESSENTIAL);
+                Box64PresetManager.loadSpinner(sBox64Preset, "Performance");
+                envVarsView.setEnvVars(new EnvVars(
+                    "MESA_GL_VERSION_OVERRIDE=4.6 " +
+                    "MESA_GLSL_VERSION_OVERRIDE=460 " +
+                    "vblank_mode=0 " +
+                    "mesa_glthread=true " +
+                    "DXVK_ASYNC=1 " +
+                    "PULSE_LATENCY_MSEC=60 " +
+                    "WINEDEBUG=-all " +
+                    "STAGING_SHARED_MEMORY=1 " +
+                    "WINEESYNC=1"
+                ));
+                Toast.makeText(context, "Generic RTS preset applied", Toast.LENGTH_SHORT).show();
+                break;
+        }
     }
 
     private void saveWineRegistryKeys(View view) {
