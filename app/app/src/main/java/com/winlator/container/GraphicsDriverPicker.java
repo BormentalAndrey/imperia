@@ -46,6 +46,36 @@ public class GraphicsDriverPicker {
         return graphicsDriver.toString();
     }
 
+    /**
+     * Программная установка графического драйвера
+     * @param graphicsDriver строка вида "turnip,virgl" или "vortek,zink"
+     */
+    public void setGraphicsDriver(String graphicsDriver) {
+        String[] identifiers = GraphicsDrivers.parseIdentifiers(graphicsDriver);
+        final String[] apiNames = {"Vulkan", "OpenGL"};
+        
+        for (int i = 0; i < container.getChildCount() && i < identifiers.length; i++) {
+            TaggedSelectionBox taggedSelectionBox = (TaggedSelectionBox)container.getChildAt(i);
+            String driverName = GraphicsDrivers.getName(identifiers[i]);
+            if (driverName != null && !driverName.isEmpty()) {
+                taggedSelectionBox.setSelectedItem(driverName);
+            }
+        }
+    }
+
+    /**
+     * Программная установка конфигурации графического драйвера
+     * @param graphicsDriverConfig строка конфигурации
+     */
+    public void setGraphicsDriverConfig(String graphicsDriverConfig) {
+        KeyValueSet[] configs = GraphicsDrivers.parseConfigs(getGraphicsDriver(), graphicsDriverConfig);
+        
+        for (int i = 0; i < container.getChildCount() && i < configs.length; i++) {
+            TaggedSelectionBox taggedSelectionBox = (TaggedSelectionBox)container.getChildAt(i);
+            taggedSelectionBox.setTag(configs[i].toString());
+        }
+    }
+
     public String getGraphicsDriverConfig() {
         StringBuilder graphicsDriverConfig = new StringBuilder();
         for (int i = 0; i < container.getChildCount(); i++) {
