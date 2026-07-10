@@ -49,6 +49,19 @@ public class Container {
     private String box64Preset = Box64Preset.DEFAULT;
     private File rootDir;
     private JSONObject extraData;
+    private boolean enableCsmt = true;
+    private boolean enableEsync = true;
+    private boolean enableFsync = false;
+    private boolean enableWineDebug = false;
+    private boolean showFps = false;
+    private String inputMode = "desktop";
+    private String dxvkVersion = "1.10.3";
+    private String box86Preset = Box64Preset.DEFAULT;
+    private String box86Version = "0.3.0";
+    private String box64Version = "0.2.6";
+    private String wineArchitecture = "win64";
+    private int screenWidth = 1280;
+    private int screenHeight = 720;
 
     public Container(int id) {
         this.id = id;
@@ -69,6 +82,45 @@ public class Container {
 
     public void setScreenSize(String screenSize) {
         this.screenSize = screenSize;
+        if (screenSize != null && screenSize.contains("x")) {
+            String[] parts = screenSize.split("x");
+            if (parts.length == 2) {
+                try {
+                    this.screenWidth = Integer.parseInt(parts[0]);
+                    this.screenHeight = Integer.parseInt(parts[1]);
+                } catch (NumberFormatException e) {
+                    // Keep default values if parsing fails
+                }
+            }
+        }
+    }
+
+    public void setScreenSize(int width, int height) {
+        this.screenWidth = width;
+        this.screenHeight = height;
+        this.screenSize = width + "x" + height;
+    }
+
+    public int getScreenWidth() {
+        return screenWidth;
+    }
+
+    public void setScreenWidth(int screenWidth) {
+        this.screenWidth = screenWidth;
+        updateScreenSizeString();
+    }
+
+    public int getScreenHeight() {
+        return screenHeight;
+    }
+
+    public void setScreenHeight(int screenHeight) {
+        this.screenHeight = screenHeight;
+        updateScreenSizeString();
+    }
+
+    private void updateScreenSizeString() {
+        this.screenSize = screenWidth + "x" + screenHeight;
     }
 
     public String getEnvVars() {
@@ -259,6 +311,95 @@ public class Container {
         this.desktopTheme = desktopTheme;
     }
 
+    // New getters and setters for additional properties
+    public boolean isEnableCsmt() {
+        return enableCsmt;
+    }
+
+    public void setEnableCsmt(boolean enableCsmt) {
+        this.enableCsmt = enableCsmt;
+    }
+
+    public boolean isEnableEsync() {
+        return enableEsync;
+    }
+
+    public void setEnableEsync(boolean enableEsync) {
+        this.enableEsync = enableEsync;
+    }
+
+    public boolean isEnableFsync() {
+        return enableFsync;
+    }
+
+    public void setEnableFsync(boolean enableFsync) {
+        this.enableFsync = enableFsync;
+    }
+
+    public boolean isEnableWineDebug() {
+        return enableWineDebug;
+    }
+
+    public void setEnableWineDebug(boolean enableWineDebug) {
+        this.enableWineDebug = enableWineDebug;
+    }
+
+    public boolean isShowFps() {
+        return showFps;
+    }
+
+    public void setShowFps(boolean showFps) {
+        this.showFps = showFps;
+    }
+
+    public String getInputMode() {
+        return inputMode;
+    }
+
+    public void setInputMode(String inputMode) {
+        this.inputMode = inputMode;
+    }
+
+    public String getDxvkVersion() {
+        return dxvkVersion;
+    }
+
+    public void setDxvkVersion(String dxvkVersion) {
+        this.dxvkVersion = dxvkVersion;
+    }
+
+    public String getBox86Preset() {
+        return box86Preset;
+    }
+
+    public void setBox86Preset(String box86Preset) {
+        this.box86Preset = box86Preset;
+    }
+
+    public String getBox86Version() {
+        return box86Version;
+    }
+
+    public void setBox86Version(String box86Version) {
+        this.box86Version = box86Version;
+    }
+
+    public String getBox64Version() {
+        return box64Version;
+    }
+
+    public void setBox64Version(String box64Version) {
+        this.box64Version = box64Version;
+    }
+
+    public String getWineArchitecture() {
+        return wineArchitecture;
+    }
+
+    public void setWineArchitecture(String wineArchitecture) {
+        this.wineArchitecture = wineArchitecture;
+    }
+
     public Iterable<Drive> drivesIterator() {
         return drivesIterator(drives);
     }
@@ -303,6 +444,22 @@ public class Container {
             data.put("startupSelection", startupSelection);
             data.put("box64Preset", box64Preset);
             data.put("desktopTheme", desktopTheme);
+            
+            // Save new properties
+            data.put("enableCsmt", enableCsmt);
+            data.put("enableEsync", enableEsync);
+            data.put("enableFsync", enableFsync);
+            data.put("enableWineDebug", enableWineDebug);
+            data.put("showFps", showFps);
+            data.put("inputMode", inputMode);
+            data.put("dxvkVersion", dxvkVersion);
+            data.put("box86Preset", box86Preset);
+            data.put("box86Version", box86Version);
+            data.put("box64Version", box64Version);
+            data.put("wineArchitecture", wineArchitecture);
+            data.put("screenWidth", screenWidth);
+            data.put("screenHeight", screenHeight);
+            
             data.put("extraData", extraData);
 
             if (!WineInfo.isMainWineVersion(wineVersion)) data.put("wineVersion", wineVersion);
@@ -359,6 +516,7 @@ public class Container {
                     setDrives(data.getString(key));
                     break;
                 case "showFPS" :
+                    setShowFps(data.getBoolean(key));
                     setHUDMode((byte)(data.getBoolean(key) ? FrameRating.Mode.SIMPLE.ordinal() : FrameRating.Mode.DISABLED.ordinal()));
                     break;
                 case "hudMode" :
@@ -384,6 +542,42 @@ public class Container {
                     break;
                 case "desktopTheme" :
                     setDesktopTheme(data.getString(key));
+                    break;
+                case "enableCsmt" :
+                    setEnableCsmt(data.getBoolean(key));
+                    break;
+                case "enableEsync" :
+                    setEnableEsync(data.getBoolean(key));
+                    break;
+                case "enableFsync" :
+                    setEnableFsync(data.getBoolean(key));
+                    break;
+                case "enableWineDebug" :
+                    setEnableWineDebug(data.getBoolean(key));
+                    break;
+                case "inputMode" :
+                    setInputMode(data.getString(key));
+                    break;
+                case "dxvkVersion" :
+                    setDxvkVersion(data.getString(key));
+                    break;
+                case "box86Preset" :
+                    setBox86Preset(data.getString(key));
+                    break;
+                case "box86Version" :
+                    setBox86Version(data.getString(key));
+                    break;
+                case "box64Version" :
+                    setBox64Version(data.getString(key));
+                    break;
+                case "wineArchitecture" :
+                    setWineArchitecture(data.getString(key));
+                    break;
+                case "screenWidth" :
+                    setScreenWidth(data.getInt(key));
+                    break;
+                case "screenHeight" :
+                    setScreenHeight(data.getInt(key));
                     break;
             }
         }
