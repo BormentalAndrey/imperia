@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace 'com.winlator.rts'
+    namespace 'com.winlator'
     compileSdk 34
 
     defaultConfig {
