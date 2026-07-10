@@ -60,6 +60,34 @@ public class DXWrapperPicker {
         return StringUtils.parseIdentifier(taggedSelectionBox.getSelectedItem());
     }
 
+    /**
+     * Программная установка DX Wrapper
+     * @param dxwrapper строка - "dxvk" или "wined3d"
+     */
+    public void setDXWrapper(String dxwrapper) {
+        if (container.getChildCount() == 0) return;
+        
+        TaggedSelectionBox taggedSelectionBox = (TaggedSelectionBox)container.getChildAt(0);
+        String parsedWrapper = DXWrappers.parseIdentifier(dxwrapper);
+        
+        if (parsedWrapper.equals(DXWrappers.WINED3D) || parsedWrapper.equals(DXWrappers.DXVK)) {
+            taggedSelectionBox.setSelectedItem(DXWrappers.getName(parsedWrapper));
+        }
+    }
+
+    /**
+     * Программная установка конфигурации DX Wrapper
+     * @param dxwrapperConfig строка конфигурации
+     */
+    public void setDXWrapperConfig(String dxwrapperConfig) {
+        KeyValueSet[] configs = DXWrappers.parseConfigs(getDXWrapper(), dxwrapperConfig);
+        
+        for (int i = 0; i < container.getChildCount() && i < configs.length; i++) {
+            TaggedSelectionBox taggedSelectionBox = (TaggedSelectionBox)container.getChildAt(i);
+            taggedSelectionBox.setTag(configs[i].toString());
+        }
+    }
+
     public String getDXWrapperConfig() {
         StringBuilder dxwrapperConfig = new StringBuilder();
         for (int i = 0; i < container.getChildCount(); i++) {
