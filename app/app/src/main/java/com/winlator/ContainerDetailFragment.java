@@ -21,6 +21,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.RadioGroup;
+import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -285,40 +286,47 @@ public class ContainerDetailFragment extends Fragment {
                                      Spinner sStartupSelection, EnvVarsView envVarsView,
                                      SharedPreferences preferences) {
         
-        // Создаем контейнер для кнопок пресетов, если его нет в layout
-        LinearLayout presetButtonsContainer = view.findViewById(R.id.LLPresetButtons);
-        if (presetButtonsContainer == null) {
-            // Если контейнера нет в layout, добавляем кнопки перед основным контентом
-            ViewGroup rootView = (ViewGroup) view;
-            presetButtonsContainer = new LinearLayout(getContext());
-            presetButtonsContainer.setId(View.generateViewId());
-            presetButtonsContainer.setOrientation(LinearLayout.HORIZONTAL);
-            presetButtonsContainer.setPadding(16, 8, 16, 8);
-            
-            // Добавляем в начало первого контейнера
-            ViewGroup firstContainer = rootView.findViewWithTag("main_container");
-            if (firstContainer == null) {
-                firstContainer = (ViewGroup) rootView.getChildAt(0);
-            }
-            firstContainer.addView(presetButtonsContainer, 0);
+        // Ищем ScrollView внутри view
+        ScrollView scrollView = null;
+        if (view instanceof ScrollView) {
+            scrollView = (ScrollView) view;
+        } else {
+            scrollView = view.findViewById(R.id.ScrollView);
         }
+        
+        ViewGroup targetLayout;
+        if (scrollView != null && scrollView.getChildCount() > 0 && scrollView.getChildAt(0) instanceof ViewGroup) {
+            targetLayout = (ViewGroup) scrollView.getChildAt(0);
+        } else if (view instanceof ViewGroup) {
+            targetLayout = (ViewGroup) view;
+        } else {
+            return;
+        }
+        
+        // Создаем контейнер для кнопок
+        LinearLayout presetButtonsContainer = new LinearLayout(getContext());
+        presetButtonsContainer.setOrientation(LinearLayout.HORIZONTAL);
+        presetButtonsContainer.setPadding(8, 8, 8, 8);
+        
+        // Добавляем в начало
+        targetLayout.addView(presetButtonsContainer, 0);
 
-        addPresetButton(presetButtonsContainer, "🎮 Mali NFS", v -> 
+        addPresetButton(presetButtonsContainer, "Mali NFS", v -> 
             applyPreset(ContainerPreset.MALI_NFS_UG2, etName, sBox64Preset, 
                        graphicsDriverPicker, dxwrapperPicker, sAudioDriver, 
                        sHUDMode, sStartupSelection, envVarsView, preferences));
 
-        addPresetButton(presetButtonsContainer, "🏰 Emperor", v -> 
+        addPresetButton(presetButtonsContainer, "Emperor", v -> 
             applyPreset(ContainerPreset.RTS_EMPEROR, etName, sBox64Preset, 
                        graphicsDriverPicker, dxwrapperPicker, sAudioDriver, 
                        sHUDMode, sStartupSelection, envVarsView, preferences));
 
-        addPresetButton(presetButtonsContainer, "⚔️ C&C", v -> 
+        addPresetButton(presetButtonsContainer, "C&C", v -> 
             applyPreset(ContainerPreset.RTS_CANDC, etName, sBox64Preset, 
                        graphicsDriverPicker, dxwrapperPicker, sAudioDriver, 
                        sHUDMode, sStartupSelection, envVarsView, preferences));
 
-        addPresetButton(presetButtonsContainer, "🎯 RTS", v -> 
+        addPresetButton(presetButtonsContainer, "RTS", v -> 
             applyPreset(ContainerPreset.RTS_GENERIC, etName, sBox64Preset, 
                        graphicsDriverPicker, dxwrapperPicker, sAudioDriver, 
                        sHUDMode, sStartupSelection, envVarsView, preferences));
