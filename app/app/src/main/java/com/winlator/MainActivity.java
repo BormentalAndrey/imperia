@@ -39,6 +39,8 @@ import com.winlator.core.PreloaderDialog;
 import com.winlator.xenvironment.RootFS;
 import com.winlator.xenvironment.RootFSInstaller;
 
+import java.io.File;
+
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
     private static final String TAG = "MainActivity";
     private static final int ROOTFS_TIMEOUT_SECONDS = 120;
@@ -94,7 +96,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             onNavigationItemSelected(navigationView.getMenu().findItem(menuItemId));
             navigationView.setCheckedItem(menuItemId);
             
-            // Проверяем разрешения и инициализируем окружение
             if (!requestAppPermissions()) {
                 initializeEnvironment();
             }
@@ -107,13 +108,9 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
     }
 
-    /**
-     * Инициализация окружения с проверкой RootFS
-     */
     private void initializeEnvironment() {
         RootFS rootFS = RootFS.find(this);
         
-        // Проверяем, установлен ли RootFS
         if (rootFS != null && rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION) {
             Log.d(TAG, "RootFS already installed, version: " + rootFS.getVersion());
             isRootFSInstalled = true;
@@ -121,20 +118,13 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             return;
         }
 
-        // RootFS не установлен или устарел - запускаем установку
         Log.d(TAG, "RootFS needs installation or update");
         preloaderDialog.show(R.string.installing_rootfs);
         
-        // Запускаем установку в фоновом потоке
         RootFSInstaller.installIfNeeded(this);
-        
-        // Ожидаем завершения установки
         waitForRootFSInstallation();
     }
 
-    /**
-     * Ожидание завершения установки RootFS с таймаутом
-     */
     private void waitForRootFSInstallation() {
         new Thread(() -> {
             int attempts = 0;
@@ -159,7 +149,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 attempts++;
             }
             
-            // Таймаут установки
             runOnUiThread(() -> {
                 preloaderDialog.close();
                 Log.e(TAG, "RootFS installation timeout!");
@@ -169,9 +158,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }).start();
     }
 
-    /**
-     * Проверка и запуск контейнера
-     */
     private void checkAndLaunchContainer() {
         if (isLaunchingContainer) {
             Log.d(TAG, "Container launch already in progress");
@@ -179,7 +165,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         }
         
         try {
-            // Проверяем наличие RootFS
             RootFS rootFS = RootFS.find(this);
             if (rootFS == null || !rootFS.isValid()) {
                 Log.e(TAG, "RootFS is invalid or null");
@@ -187,7 +172,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
                 return;
             }
 
-            // Проверяем наличие Wine
             File wineBinary = new File(rootFS.getRootDir(), rootFS.getWinePath() + "/bin/wine");
             if (!wineBinary.exists()) {
                 Log.e(TAG, "Wine binary not found at: " + wineBinary.getPath());
