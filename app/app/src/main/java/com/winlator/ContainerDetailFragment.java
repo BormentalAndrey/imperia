@@ -21,7 +21,6 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.RadioGroup;
-import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -286,30 +285,15 @@ public class ContainerDetailFragment extends Fragment {
                                      Spinner sStartupSelection, EnvVarsView envVarsView,
                                      SharedPreferences preferences) {
         
-        // Ищем ScrollView внутри view
-        ScrollView scrollView = null;
-        if (view instanceof ScrollView) {
-            scrollView = (ScrollView) view;
-        } else {
-            scrollView = view.findViewById(R.id.ScrollView);
-        }
-        
-        ViewGroup targetLayout;
-        if (scrollView != null && scrollView.getChildCount() > 0 && scrollView.getChildAt(0) instanceof ViewGroup) {
-            targetLayout = (ViewGroup) scrollView.getChildAt(0);
-        } else if (view instanceof ViewGroup) {
-            targetLayout = (ViewGroup) view;
-        } else {
-            return;
-        }
-        
-        // Создаем контейнер для кнопок
         LinearLayout presetButtonsContainer = new LinearLayout(getContext());
         presetButtonsContainer.setOrientation(LinearLayout.HORIZONTAL);
         presetButtonsContainer.setPadding(8, 8, 8, 8);
         
-        // Добавляем в начало
-        targetLayout.addView(presetButtonsContainer, 0);
+        if (view instanceof ViewGroup) {
+            ((ViewGroup) view).addView(presetButtonsContainer, 0);
+        } else {
+            return;
+        }
 
         addPresetButton(presetButtonsContainer, "Mali NFS", v -> 
             applyPreset(ContainerPreset.MALI_NFS_UG2, etName, sBox64Preset, 
