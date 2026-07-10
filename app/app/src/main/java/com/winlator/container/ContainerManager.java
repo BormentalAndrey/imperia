@@ -24,6 +24,22 @@ public class ContainerManager {
     private int maxContainerId = 0;
     private final File homeDir;
     private final Context context;
+    
+    // Добавляем типы пресетов
+    public enum ContainerPreset {
+        MALI_NFS_UG2("NFS Underground 2 Mali", "Mali GPU optimized for NFS UG2"),
+        RTS_EMPEROR("Emperor: Battle for Dune", "RTS games optimized"),
+        RTS_CANDC("C&C Generals/Zero Hour", "RTS SAGE engine games"),
+        RTS_GENERIC("Generic RTS", "General RTS games setup");
+        
+        public final String name;
+        public final String description;
+        
+        ContainerPreset(String name, String description) {
+            this.name = name;
+            this.description = description;
+        }
+    }
 
     public ContainerManager(Context context) {
         this.context = context;
@@ -32,7 +48,8 @@ public class ContainerManager {
         loadContainers();
         
         if (containers.isEmpty()) {
-            createDefaultContainerSync();
+            // Создаем контейнер с предустановками Mali по умолчанию
+            createDefaultContainerSync(ContainerPreset.MALI_NFS_UG2);
         }
     }
 
@@ -75,22 +92,209 @@ public class ContainerManager {
     }
 
     /**
-     * Синхронное создание контейнера с настройками для Mali GPU.
-     * Гарантирует, что после вызова конструктора ContainerManager
-     * контейнер уже существует и активирован.
+     * Синхронное создание контейнера с выбранным пресетом
      */
-    private void createDefaultContainerSync() {
+    private void createDefaultContainerSync(ContainerPreset preset) {
         try {
             JSONObject data = new JSONObject();
-            data.put("name", "NFS Underground 2 Mali");
-            data.put("graphicsDriver", "virgl,virgl");
-            data.put("dxwrapper", "wined3d");
+            
+            switch (preset) {
+                case MALI_NFS_UG2:
+                    configureMaliPreset(data);
+                    break;
+                case RTS_EMPEROR:
+                    configureRTSPreset(data, "Emperor: Battle for Dune", "1024x768");
+                    break;
+                case RTS_CANDC:
+                    configureRTSPreset(data, "C&C Generals", "1280x720");
+                    break;
+                case RTS_GENERIC:
+                    configureRTSPreset(data, "RTS Game", "800x600");
+                    break;
+            }
             
             Container container = createContainer(data);
             if (container != null) {
                 activateContainer(container);
                 FileUtils.chmod(container.getRootDir(), 0771);
             }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Конфигурация для Mali GPU (NFS Underground 2)
+     */
+    private void configureMaliPreset(JSONObject data) throws JSONException {
+        data.put("name", "NFS Underground 2 Mali");
+        data.put("graphicsDriver", "virgl,virgl");
+        data.put("dxwrapper", "wined3d");
+        data.put("resolution", "800x600");
+        data.put("box64Preset", "Compatibility");
+        
+        // Специфичные для Mali настройки
+        JSONObject envVars = new JSONObject();
+        envVars.put("MESA_GL_VERSION_OVERRIDE", "3.3");
+        envVars.put("MESA_GLSL_VERSION_OVERRIDE", "330");
+        envVars.put("vblank_mode", "0");
+        envVars.put("MESA_EXTENSION_OVERRIDE", "GL_EXT_texture_compression_s3tc");
+        envVars.put("force_glsl_extensions_warn", "true");
+        envVars.put("LIBGL_ALWAYS_SOFTWARE", "false");
+        data.put("envVars", envVars);
+        
+        // WinComponents для NFS UG2
+        JSONObject winComponents = new JSONObject();
+        winComponents.put("directmusic", "native");
+        winComponents.put("directplay", "native");
+        data.put("winComponents", winComponents);
+        
+        // Дополнительные настройки Mali
+        data.put("enableCsmt", true);
+        data.put("enableEsync", false);
+        data.put("wineVersion", "wine-8.0.1");
+        data.put("screenWidth", 800);
+        data.put("screenHeight", 600);
+    }
+    
+    /**
+     * Конфигурация для RTS игр
+     */
+    private void configureRTSPreset(JSONObject data, String gameName, String resolution) throws JSONException {
+        data.put("name", gameName);
+        data.put("graphicsDriver", "virgl,virgl");
+        data.put("dxwrapper", "dxvk");
+        data.put("resolution", resolution);
+        data.put("box64Preset", "Performance");
+        
+        // Парсим разрешение
+        String[] resParts = resolution.split("x");
+        if (resParts.length == 2) {
+            data.put("screenWidth", Integer.parseInt(resParts[0]));
+            data.put("screenHeight", Integer.parseInt(resParts[1]));
+        }
+        
+        // Переменные окружения для RTS
+        JSONObject envVars = new JSONObject();
+        envVars.put("MESA_GL_VERSION_OVERRIDE", "4.6");
+        envVars.put("MESA_GLSL_VERSION_OVERRIDE", "460");
+        envVars.put("vblank_mode", "0");
+        envVars.put("mesa_glthread", "true");
+        envVars.put("DXVK_ASYNC", "1");
+        envVars.put("DXVK_HUD", "0");
+        envVars.put("PULSE_LATENCY_MSEC", "60");
+        envVars.put("WINEDEBUG", "-all");
+        envVars.put("DXVK_FRAME_RATE", "60");
+        
+        // Специфичные для стратегий оптимизации
+        envVars.put("STAGING_SHARED_MEMORY", "1");
+        envVars.put("WINEESYNC", "1");
+        envVars.put("DXVK_CONFIG_FILE", "/dev/null");
+        envVars.put("DXVK_LOG_LEVEL", "none");
+        
+        data.put("envVars", envVars);
+        
+        // WinComponents для RTS
+        JSONObject winComponents = new JSONObject();
+        winComponents.put("directmusic", "native");
+        winComponents.put("directplay", "native");
+        winComponents.put("d3dx9_43", "native");
+        winComponents.put("d3dx9_42", "native");
+        winComponents.put("d3dx9_36", "native");
+        winComponents.put("d3dcompiler_43", "native");
+        winComponents.put("d3dcompiler_47", "native");
+        data.put("winComponents", winComponents);
+        
+        // Дополнительные настройки
+        data.put("enableCsmt", true);
+        data.put("enableEsync", true);
+        data.put("wineVersion", "wine-8.0.1");
+        data.put("inputMode", "desktop");
+        data.put("showFps", false);
+        data.put("enableWineDebug", false);
+        
+        // Специфичные настройки для каждой игры
+        if (gameName.contains("Emperor")) {
+            envVars.put("DXVK_FRAME_RATE", "30"); // Emperor работает лучше на 30 FPS
+            data.put("envVars", envVars);
+        } else if (gameName.contains("Generals")) {
+            envVars.put("DXVK_FRAME_RATE", "60");
+            data.put("envVars", envVars);
+        }
+    }
+
+    /**
+     * Создание контейнера с выбором пресета (публичный метод)
+     */
+    public void createContainerWithPreset(ContainerPreset preset, Callback<Container> callback) {
+        createContainerWithPresetAsync(preset, callback);
+    }
+    
+    private void createContainerWithPresetAsync(ContainerPreset preset, Callback<Container> callback) {
+        final Handler handler = new Handler();
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                JSONObject data = new JSONObject();
+                
+                switch (preset) {
+                    case MALI_NFS_UG2:
+                        configureMaliPreset(data);
+                        break;
+                    case RTS_EMPEROR:
+                        configureRTSPreset(data, "Emperor: Battle for Dune", "1024x768");
+                        break;
+                    case RTS_CANDC:
+                        configureRTSPreset(data, "C&C Generals", "1280x720");
+                        break;
+                    case RTS_GENERIC:
+                        configureRTSPreset(data, "RTS Game", "800x600");
+                        break;
+                }
+                
+                final Container container = createContainer(data);
+                handler.post(() -> callback.call(container));
+            } catch (JSONException e) {
+                handler.post(() -> callback.call(null));
+            }
+        });
+    }
+
+    /**
+     * Применение пресета к существующему контейнеру
+     */
+    public void applyPresetToContainer(Container container, ContainerPreset preset) {
+        try {
+            switch (preset) {
+                case MALI_NFS_UG2:
+                    container.setName("NFS Underground 2 Mali");
+                    container.setGraphicsDriver("virgl,virgl");
+                    container.setDXWrapper("wined3d");
+                    container.setScreenSize(800, 600);
+                    container.setBox64Preset("Compatibility");
+                    break;
+                case RTS_EMPEROR:
+                    container.setName("Emperor: Battle for Dune");
+                    container.setGraphicsDriver("virgl,virgl");
+                    container.setDXWrapper("dxvk");
+                    container.setScreenSize(1024, 768);
+                    container.setBox64Preset("Performance");
+                    break;
+                case RTS_CANDC:
+                    container.setName("C&C Generals");
+                    container.setGraphicsDriver("virgl,virgl");
+                    container.setDXWrapper("dxvk");
+                    container.setScreenSize(1280, 720);
+                    container.setBox64Preset("Performance");
+                    break;
+                case RTS_GENERIC:
+                    container.setName("RTS Game");
+                    container.setGraphicsDriver("virgl,virgl");
+                    container.setDXWrapper("dxvk");
+                    container.setScreenSize(800, 600);
+                    container.setBox64Preset("Performance");
+                    break;
+            }
+            container.saveData();
         } catch (Exception e) {
             e.printStackTrace();
         }
